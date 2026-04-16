@@ -1,0 +1,38 @@
+# Git / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtualenvs
+.venv/
+venv/
+ENV/
+env/
+
+# Django dev artifacts
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
