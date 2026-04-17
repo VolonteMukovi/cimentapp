@@ -1,0 +1,321 @@
+{% extends "base_auth.html" %}
+{% block title %}Inscription — CimentApp{% endblock %}
+{% block content %}
+  <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Créer un compte</h1>
+  <p class="mt-2 text-sm text-slate-600">Un compte <strong class="text-black">administrateur entreprise</strong> sera créé. Vous pourrez ensuite enregistrer votre société.</p>
+
+  <form id="signup-form" method="post" class="mt-8" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div
+      id="signup-wizard"
+      class="space-y-6"
+      data-initial-step="{{ signup_initial_step }}"
+      data-total-steps="2"
+    >
+      <div class="flex items-center justify-center gap-2" aria-hidden="true">
+        <span id="signup-step-dot-1" class="h-2.5 w-2.5 rounded-full bg-black transition-colors"></span>
+        <span class="h-px w-8 bg-slate-200"></span>
+        <span id="signup-step-dot-2" class="h-2.5 w-2.5 rounded-full bg-slate-200 transition-colors"></span>
+      </div>
+      <p class="text-center text-xs font-medium text-slate-500">
+        <span id="signup-step-label">Étape 1 sur 2 — Vos coordonnées</span>
+      </p>
+
+      <div id="signup-step-1" class="signup-step space-y-5" data-step="1">
+        <div class="signup-field" data-field="first_name">
+          <label for="{{ form.first_name.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.first_name.label }}</label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.first_name.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="signup-field" data-field="last_name">
+          <label for="{{ form.last_name.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.last_name.label }}</label>
+          {{ form.last_name }}
+          {% if form.last_name.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.last_name.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="signup-field" data-field="email">
+          <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.email.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+      </div>
+
+      <div id="signup-step-2" class="signup-step hidden space-y-5" data-step="2">
+        <div class="signup-field" data-field="username">
+          <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.username.label }}</label>
+          {{ form.username }}
+          {% if form.username.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.username.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="signup-field" data-field="password">
+          <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password.label }}</label>
+          {{ form.password }}
+          {% if form.password.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.password.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="signup-field" data-field="password_confirm">
+          <label for="{{ form.password_confirm.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password_confirm.label }}</label>
+          {{ form.password_confirm }}
+          {% if form.password_confirm.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.password_confirm.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="signup-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+        <button type="button" id="signup-btn-prev" class="order-2 hidden w-full rounded-full border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2 sm:order-1 sm:w-auto sm:min-w-[7rem]">
+          Retour
+        </button>
+        <button type="button" id="signup-btn-next" class="order-1 w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/25 focus:ring-offset-2 sm:order-2 sm:ml-auto sm:w-auto sm:min-w-[7rem]">
+          Suivant
+        </button>
+        <button type="submit" id="signup-btn-submit" class="order-1 hidden w-full flex items-center justify-center gap-2 rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/25 focus:ring-offset-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 sm:order-2 sm:ml-auto sm:w-auto sm:min-w-[7rem]">
+          <span class="signup-submit-label">Soumettre</span>
+          <span class="signup-submit-spinner hidden inline-flex h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </form>
+
+  <p class="mt-8 text-center text-sm text-slate-600">
+    Déjà inscrit ?
+    <a href="{% url 'login' %}" class="font-semibold text-black underline decoration-slate-300 underline-offset-2 hover:decoration-black">Se connecter</a>
+  </p>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var form = document.getElementById('signup-form');
+  var wizard = document.getElementById('signup-wizard');
+  if (!form || !wizard) return;
+
+  var step1 = document.getElementById('signup-step-1');
+  var step2 = document.getElementById('signup-step-2');
+  var btnPrev = document.getElementById('signup-btn-prev');
+  var btnNext = document.getElementById('signup-btn-next');
+  var btnSubmit = document.getElementById('signup-btn-submit');
+  var labelEl = document.getElementById('signup-step-label');
+  var dot1 = document.getElementById('signup-step-dot-1');
+  var dot2 = document.getElementById('signup-step-dot-2');
+  var total = parseInt(wizard.getAttribute('data-total-steps') || '2', 10);
+  var step = parseInt(wizard.getAttribute('data-initial-step') || '1', 10);
+  if (step < 1) step = 1;
+  if (step > total) step = total;
+
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  function fieldWrap(name) {
+    return form.querySelector('.signup-field[data-field="' + name + '"]');
+  }
+
+  function inputIn(wrap) {
+    return wrap ? wrap.querySelector('input,textarea,select') : null;
+  }
+
+  function liveErrorEl(wrap) {
+    return wrap ? wrap.querySelector('.signup-live-error') : null;
+  }
+
+  function setInputInvalid(inp, invalid) {
+    if (!inp) return;
+    if (invalid) {
+      inp.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500/30');
+      inp.classList.remove('border-slate-200', 'focus:border-black', 'focus:ring-black/10');
+    } else {
+      inp.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500/30');
+      inp.classList.add('border-slate-200', 'focus:border-black', 'focus:ring-black/10');
+    }
+  }
+
+  function showLiveError(wrap, message) {
+    var el = liveErrorEl(wrap);
+    var inp = inputIn(wrap);
+    if (!el) return;
+    if (message) {
+      el.textContent = message;
+      el.classList.remove('hidden');
+      setInputInvalid(inp, true);
+    } else {
+      el.textContent = '';
+      el.classList.add('hidden');
+      var hasServer = wrap && wrap.querySelector('ul.text-red-600');
+      setInputInvalid(inp, !!hasServer);
+    }
+  }
+
+  function valStep1() {
+    var ok = true;
+    ['first_name', 'last_name', 'email'].forEach(function (name) {
+      var w = fieldWrap(name);
+      var inp = inputIn(w);
+      if (!inp) return;
+      var v = (inp.value || '').trim();
+      if (!v) {
+        showLiveError(w, name === 'email' ? 'L’adresse e-mail est obligatoire.' : 'Ce champ est obligatoire.');
+        ok = false;
+      } else if (name === 'email' && !emailRe.test(v)) {
+        showLiveError(w, 'Veuillez saisir une adresse e-mail valide.');
+        ok = false;
+      } else {
+        showLiveError(w, '');
+      }
+    });
+    return ok;
+  }
+
+  function valStep2() {
+    var ok = true;
+    var wUser = fieldWrap('username');
+    var inpUser = inputIn(wUser);
+    if (inpUser) {
+      var u = (inpUser.value || '').trim();
+      if (!u) {
+        showLiveError(wUser, 'Le nom d’utilisateur est obligatoire.');
+        ok = false;
+      } else {
+        showLiveError(wUser, '');
+      }
+    }
+    var wP = fieldWrap('password');
+    var wP2 = fieldWrap('password_confirm');
+    var p = inputIn(wP);
+    var p2 = inputIn(wP2);
+    if (p) {
+      var pv = p.value || '';
+      if (!pv) {
+        showLiveError(wP, 'Le mot de passe est obligatoire.');
+        ok = false;
+      } else if (pv.length < 8) {
+        showLiveError(wP, 'Au moins 8 caractères (exigence minimale).');
+        ok = false;
+      } else {
+        showLiveError(wP, '');
+      }
+    }
+    if (p2 && p) {
+      var p2v = p2.value || '';
+      if (!p2v) {
+        showLiveError(wP2, 'Veuillez confirmer le mot de passe.');
+        ok = false;
+      } else if (p2v !== (p.value || '')) {
+        showLiveError(wP2, 'Les deux mots de passe ne correspondent pas.');
+        ok = false;
+      } else {
+        showLiveError(wP2, '');
+      }
+    }
+    return ok;
+  }
+
+  function validateFieldLive(name) {
+    var w = fieldWrap(name);
+    if (!w) return;
+    if (w.closest('#signup-step-1') && step !== 1) return;
+    if (w.closest('#signup-step-2') && step !== 2) return;
+    if (['first_name', 'last_name', 'email'].indexOf(name) !== -1) valStep1();
+    if (['username', 'password', 'password_confirm'].indexOf(name) !== -1) valStep2();
+  }
+
+  function updateUI() {
+    step1.classList.toggle('hidden', step !== 1);
+    step2.classList.toggle('hidden', step !== 2);
+    btnPrev.classList.toggle('hidden', step <= 1);
+    btnNext.classList.toggle('hidden', step >= total);
+    btnSubmit.classList.toggle('hidden', step < total);
+    if (dot1) dot1.className = 'h-2.5 w-2.5 rounded-full transition-colors ' + (step >= 1 ? 'bg-black' : 'bg-slate-200');
+    if (dot2) dot2.className = 'h-2.5 w-2.5 rounded-full transition-colors ' + (step >= 2 ? 'bg-black' : 'bg-slate-200');
+    if (labelEl) {
+      labelEl.textContent = step === 1
+        ? 'Étape 1 sur 2 — Vos coordonnées'
+        : 'Étape 2 sur 2 — Identifiants et mot de passe';
+    }
+  }
+
+  btnNext.addEventListener('click', function () {
+    if (step === 1) {
+      if (!valStep1()) return;
+      step = 2;
+      updateUI();
+    }
+  });
+
+  btnPrev.addEventListener('click', function () {
+    if (step > 1) {
+      step -= 1;
+      updateUI();
+    }
+  });
+
+  form.querySelectorAll('.signup-field').forEach(function (wrap) {
+    var inp = inputIn(wrap);
+    var name = wrap.getAttribute('data-field');
+    if (!inp || !name) return;
+    inp.addEventListener('blur', function () { validateFieldLive(name); });
+    inp.addEventListener('input', function () {
+      var err = liveErrorEl(wrap);
+      if (err && !err.classList.contains('hidden')) validateFieldLive(name);
+      if (name === 'password' || name === 'password_confirm') {
+        var wP2 = fieldWrap('password_confirm');
+        var p2err = liveErrorEl(wP2);
+        if (p2err && !p2err.classList.contains('hidden')) validateFieldLive('password_confirm');
+      }
+    });
+  });
+
+  form.addEventListener('submit', function (e) {
+    if (step < total) {
+      e.preventDefault();
+      return;
+    }
+    if (!valStep1() || !valStep2()) {
+      e.preventDefault();
+      if (!valStep1()) step = 1;
+      else step = 2;
+      updateUI();
+      return;
+    }
+    btnSubmit.disabled = true;
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+    var sp = btnSubmit.querySelector('.signup-submit-spinner');
+    var lb = btnSubmit.querySelector('.signup-submit-label');
+    if (sp) sp.classList.remove('hidden');
+    if (lb) lb.textContent = 'Envoi en cours…';
+  });
+
+  updateUI();
+})();
+</script>
+{% endblock %}

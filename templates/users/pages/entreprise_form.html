@@ -1,0 +1,416 @@
+{% extends "base_app.html" %}
+{% block title %}Nouvelle entreprise — CimentApp{% endblock %}
+{% block content %}
+<div class="app-surface-card p-5 sm:p-7">
+  <h1 class="text-xl font-bold text-black sm:text-2xl">Créer une entreprise</h1>
+  <p class="mt-2 text-sm text-slate-600">Les informations seront associées automatiquement à votre compte. Complétez les étapes ci-dessous.</p>
+
+  <form id="entreprise-form" method="post" enctype="multipart/form-data" class="mt-8" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <div
+      id="entreprise-wizard"
+      class="space-y-6"
+      data-initial-step="{{ entreprise_initial_step }}"
+      data-total-steps="3"
+    >
+      <div class="flex items-center justify-center gap-1.5 sm:gap-2" aria-hidden="true">
+        <span id="entr-dot-1" class="h-2.5 w-2.5 shrink-0 rounded-full bg-black transition-colors"></span>
+        <span class="h-px w-6 bg-slate-200 sm:w-8"></span>
+        <span id="entr-dot-2" class="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-200 transition-colors"></span>
+        <span class="h-px w-6 bg-slate-200 sm:w-8"></span>
+        <span id="entr-dot-3" class="h-2.5 w-2.5 shrink-0 rounded-full bg-slate-200 transition-colors"></span>
+      </div>
+      <p class="text-center text-xs font-medium text-slate-500">
+        <span id="entr-step-label">Étape 1 sur 3 — Identité de l’entreprise</span>
+      </p>
+
+      <div id="entr-step-1" class="entr-step space-y-5" data-step="1">
+        <div class="entr-field" data-field="nom">
+          <label for="{{ form.nom.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.nom.label }}</label>
+          {{ form.nom }}
+          {% if form.nom.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.nom.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="secteur">
+          <label for="{{ form.secteur.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.secteur.label }}</label>
+          {{ form.secteur }}
+          {% if form.secteur.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.secteur.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="slogan">
+          <label for="{{ form.slogan.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.slogan.label }}</label>
+          {{ form.slogan }}
+          {% if form.slogan.help_text %}<p class="mt-1 text-xs text-slate-500">{{ form.slogan.help_text }}</p>{% endif %}
+          {% if form.slogan.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.slogan.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+      </div>
+
+      <div id="entr-step-2" class="entr-step hidden space-y-5" data-step="2">
+        <div class="entr-field" data-field="pays">
+          <label for="{{ form.pays.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.pays.label }}</label>
+          {{ form.pays }}
+          {% if form.pays.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.pays.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="adresse">
+          <label for="{{ form.adresse.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.adresse.label }}</label>
+          {{ form.adresse }}
+          {% if form.adresse.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.adresse.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="telephone">
+          <label for="{{ form.telephone.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.telephone.label }}</label>
+          {{ form.telephone }}
+          {% if form.telephone.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.telephone.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="email">
+          <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.email.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+      </div>
+
+      <div id="entr-step-3" class="entr-step hidden space-y-5" data-step="3">
+        <div class="entr-field" data-field="nif">
+          <label for="{{ form.nif.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.nif.label }}</label>
+          {{ form.nif }}
+          {% if form.nif.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.nif.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="responsable">
+          <label for="{{ form.responsable.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.responsable.label }}</label>
+          {{ form.responsable }}
+          {% if form.responsable.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.responsable.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+        <div class="entr-field" data-field="logo">
+          <label for="{{ form.logo.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.logo.label }}</label>
+          <div id="entr-logo-shell" class="mt-1 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 transition-colors">
+            {{ form.logo }}
+          </div>
+          {% if form.logo.errors %}
+            <ul class="mt-1 list-none space-y-0.5 pl-0 text-sm font-medium text-red-600">
+              {% for error in form.logo.errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+          {% endif %}
+          <p class="entr-live-error mt-1 hidden text-sm font-medium text-red-600" role="alert"></p>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end">
+        <button type="button" id="entr-btn-prev" class="order-2 hidden w-full rounded-full border border-slate-200 bg-white px-4 py-3.5 text-sm font-semibold text-slate-800 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2 sm:order-1 sm:w-auto sm:min-w-[7rem]">
+          Retour
+        </button>
+        <button type="button" id="entr-btn-next" class="order-1 w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 sm:order-2 sm:ml-auto sm:w-auto sm:min-w-[7rem]">
+          Suivant
+        </button>
+        <button type="submit" id="entr-btn-submit" class="order-1 hidden w-full flex items-center justify-center gap-2 rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/30 focus:ring-offset-2 enabled:cursor-pointer disabled:cursor-not-allowed disabled:opacity-70 sm:order-2 sm:ml-auto sm:w-auto sm:min-w-[10rem]">
+          <span class="entr-submit-label">Enregistrer</span>
+          <span class="entr-submit-spinner hidden inline-flex h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var form = document.getElementById('entreprise-form');
+  var wizard = document.getElementById('entreprise-wizard');
+  if (!form || !wizard) return;
+
+  var step1 = document.getElementById('entr-step-1');
+  var step2 = document.getElementById('entr-step-2');
+  var step3 = document.getElementById('entr-step-3');
+  var btnPrev = document.getElementById('entr-btn-prev');
+  var btnNext = document.getElementById('entr-btn-next');
+  var btnSubmit = document.getElementById('entr-btn-submit');
+  var labelEl = document.getElementById('entr-step-label');
+  var logoShell = document.getElementById('entr-logo-shell');
+  var total = parseInt(wizard.getAttribute('data-total-steps') || '3', 10);
+  var step = parseInt(wizard.getAttribute('data-initial-step') || '1', 10);
+  if (step < 1) step = 1;
+  if (step > total) step = total;
+
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  var labels = [
+    '',
+    'Étape 1 sur 3 — Identité de l’entreprise',
+    'Étape 2 sur 3 — Localisation et contact',
+    'Étape 3 sur 3 — Informations légales et logo'
+  ];
+
+  function fieldWrap(name) {
+    return form.querySelector('.entr-field[data-field="' + name + '"]');
+  }
+
+  function textInputIn(wrap) {
+    if (!wrap) return null;
+    return wrap.querySelector('input:not([type="file"]):not([type="hidden"]),textarea,select');
+  }
+
+  function fileInputIn(wrap) {
+    if (!wrap) return null;
+    return wrap.querySelector('input[type="file"]');
+  }
+
+  function liveErrorEl(wrap) {
+    return wrap ? wrap.querySelector('.entr-live-error') : null;
+  }
+
+  function setTextInvalid(inp, invalid) {
+    if (!inp) return;
+    if (invalid) {
+      inp.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-500/30');
+      inp.classList.remove('border-slate-200', 'focus:border-black', 'focus:ring-black/10');
+    } else {
+      inp.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-500/30');
+      inp.classList.add('border-slate-200', 'focus:border-black', 'focus:ring-black/10');
+    }
+  }
+
+  function setLogoShellInvalid(invalid) {
+    if (!logoShell) return;
+    if (invalid) {
+      logoShell.classList.add('border-red-500', 'bg-red-50/50');
+      logoShell.classList.remove('border-slate-200', 'bg-slate-50/80');
+    } else {
+      logoShell.classList.remove('border-red-500', 'bg-red-50/50');
+      logoShell.classList.add('border-slate-200', 'bg-slate-50/80');
+    }
+  }
+
+  function showLiveError(wrap, message, isFile) {
+    var el = liveErrorEl(wrap);
+    var inp = isFile ? null : textInputIn(wrap);
+    if (!el) return;
+    if (message) {
+      el.textContent = message;
+      el.classList.remove('hidden');
+      if (isFile) setLogoShellInvalid(true);
+      else setTextInvalid(inp, true);
+    } else {
+      el.textContent = '';
+      el.classList.add('hidden');
+      var hasServer = wrap && wrap.querySelector('ul.text-red-600');
+      if (isFile) setLogoShellInvalid(!!hasServer);
+      else setTextInvalid(inp, !!hasServer);
+    }
+  }
+
+  function valStep1() {
+    var ok = true;
+    ['nom', 'secteur'].forEach(function (name) {
+      var w = fieldWrap(name);
+      var inp = textInputIn(w);
+      if (!inp) return;
+      var v = (inp.value || '').trim();
+      if (!v) {
+        showLiveError(w, 'Ce champ est obligatoire.', false);
+        ok = false;
+      } else {
+        showLiveError(w, '', false);
+      }
+    });
+    var wSlogan = fieldWrap('slogan');
+    if (wSlogan) showLiveError(wSlogan, '', false);
+    return ok;
+  }
+
+  function valStep2() {
+    var ok = true;
+    [['pays', 'Ce champ est obligatoire.'], ['adresse', 'Ce champ est obligatoire.'], ['telephone', 'Ce champ est obligatoire.']].forEach(function (pair) {
+      var name = pair[0];
+      var msg = pair[1];
+      var w = fieldWrap(name);
+      var inp = textInputIn(w);
+      if (!inp) return;
+      if (!(inp.value || '').trim()) {
+        showLiveError(w, msg, false);
+        ok = false;
+      } else {
+        showLiveError(w, '', false);
+      }
+    });
+    var wE = fieldWrap('email');
+    var inpE = textInputIn(wE);
+    if (inpE) {
+      var ev = (inpE.value || '').trim();
+      if (!ev) {
+        showLiveError(wE, 'L’adresse e-mail est obligatoire.', false);
+        ok = false;
+      } else if (!emailRe.test(ev)) {
+        showLiveError(wE, 'Veuillez saisir une adresse e-mail valide.', false);
+        ok = false;
+      } else {
+        showLiveError(wE, '', false);
+      }
+    }
+    return ok;
+  }
+
+  function valStep3() {
+    var ok = true;
+    ['nif', 'responsable'].forEach(function (name) {
+      var w = fieldWrap(name);
+      var inp = textInputIn(w);
+      if (!inp) return;
+      if (!(inp.value || '').trim()) {
+        showLiveError(w, 'Ce champ est obligatoire.', false);
+        ok = false;
+      } else {
+        showLiveError(w, '', false);
+      }
+    });
+    var wLogo = fieldWrap('logo');
+    if (wLogo) showLiveError(wLogo, '', true);
+    return ok;
+  }
+
+  function validateStep(s) {
+    if (s === 1) return valStep1();
+    if (s === 2) return valStep2();
+    if (s === 3) return valStep3();
+    return true;
+  }
+
+  function validateFieldLive(name) {
+    var w = fieldWrap(name);
+    if (!w) return;
+    if (w.closest('#entr-step-1') && step !== 1) return;
+    if (w.closest('#entr-step-2') && step !== 2) return;
+    if (w.closest('#entr-step-3') && step !== 3) return;
+    if (name === 'logo') return;
+    validateStep(step);
+  }
+
+  function setDot(n, active) {
+    var d = document.getElementById('entr-dot-' + n);
+    if (!d) return;
+    d.className = 'h-2.5 w-2.5 shrink-0 rounded-full transition-colors ' + (active ? 'bg-black' : 'bg-slate-200');
+  }
+
+  function updateUI() {
+    step1.classList.toggle('hidden', step !== 1);
+    step2.classList.toggle('hidden', step !== 2);
+    step3.classList.toggle('hidden', step !== 3);
+    btnPrev.classList.toggle('hidden', step <= 1);
+    btnNext.classList.toggle('hidden', step >= total);
+    btnSubmit.classList.toggle('hidden', step < total);
+    setDot(1, step >= 1);
+    setDot(2, step >= 2);
+    setDot(3, step >= 3);
+    if (labelEl) labelEl.textContent = labels[step] || '';
+  }
+
+  btnNext.addEventListener('click', function () {
+    if (!validateStep(step)) return;
+    if (step < total) {
+      step += 1;
+      updateUI();
+    }
+  });
+
+  btnPrev.addEventListener('click', function () {
+    if (step > 1) {
+      step -= 1;
+      updateUI();
+    }
+  });
+
+  form.querySelectorAll('.entr-field').forEach(function (wrap) {
+    var name = wrap.getAttribute('data-field');
+    if (!name || name === 'logo') {
+      var finp = fileInputIn(wrap);
+      if (finp) finp.addEventListener('change', function () {
+        if (logoShell) {
+          setLogoShellInvalid(false);
+          var le = liveErrorEl(wrap);
+          if (le) { le.textContent = ''; le.classList.add('hidden'); }
+        }
+      });
+      return;
+    }
+    var inp = textInputIn(wrap);
+    if (!inp) return;
+    inp.addEventListener('blur', function () { validateFieldLive(name); });
+    inp.addEventListener('input', function () {
+      var err = liveErrorEl(wrap);
+      if (err && !err.classList.contains('hidden')) validateFieldLive(name);
+    });
+  });
+
+  form.addEventListener('submit', function (e) {
+    if (step < total) {
+      e.preventDefault();
+      return;
+    }
+    if (!valStep1() || !valStep2() || !valStep3()) {
+      e.preventDefault();
+      if (!valStep1()) step = 1;
+      else if (!valStep2()) step = 2;
+      else step = 3;
+      updateUI();
+      return;
+    }
+    btnSubmit.disabled = true;
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+    var sp = btnSubmit.querySelector('.entr-submit-spinner');
+    var lb = btnSubmit.querySelector('.entr-submit-label');
+    if (sp) sp.classList.remove('hidden');
+    if (lb) lb.textContent = 'Enregistrement en cours…';
+  });
+
+  updateUI();
+})();
+</script>
+{% endblock %}

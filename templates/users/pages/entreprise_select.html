@@ -1,0 +1,25 @@
+{% extends "base_app.html" %}
+{% block title %}Choisir une entreprise — CimentApp{% endblock %}
+{% block hero %}
+<div class="mb-4 text-center">
+  <p class="text-sm font-medium text-slate-500">Plusieurs sociétés</p>
+  <h1 class="mt-1 text-2xl font-bold text-black">Sélectionnez une entreprise</h1>
+</div>
+{% endblock %}
+{% block content %}
+  <div class="app-surface-card p-5 sm:p-7">
+    <form method="post" class="space-y-3">
+      {% csrf_token %}
+      {% for e in entreprises %}
+        <label class="flex cursor-pointer items-center gap-4 rounded-2xl border border-slate-100 bg-slate-50/90 px-4 py-4 ring-1 ring-black/5 has-[:checked]:border-black has-[:checked]:bg-white has-[:checked]:ring-black/20">
+          <input type="radio" name="entreprise_id" value="{{ e.pk }}" class="h-4 w-4 border-slate-300 text-black focus:ring-black/20" {% if active_entreprise and active_entreprise.pk == e.pk %}checked{% endif %}>
+          <div class="min-w-0 flex-1">
+            <p class="font-semibold text-black">{{ e.nom }}</p>
+            <p class="text-xs text-slate-500">{{ e.pays }}</p>
+          </div>
+        </label>
+      {% endfor %}
+      <button type="submit" class="mt-6 w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-neutral-800">Continuer</button>
+    </form>
+  </div>
+{% endblock %}

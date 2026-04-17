@@ -1,0 +1,40 @@
+{% extends "base_app.html" %}
+{% block title %}Entreprises — CimentApp{% endblock %}
+{% block content %}
+  <div class="app-surface-card p-5 sm:p-7">
+    <div class="mb-6 flex items-center justify-between gap-3">
+      <h1 class="text-xl font-bold text-black sm:text-2xl">Mes entreprises</h1>
+      <a href="{% url 'entreprises_create' %}" class="shrink-0 rounded-full bg-black px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800">+ Nouvelle</a>
+    </div>
+    {% if not entreprises %}
+      <p class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm text-slate-600">Aucune entreprise pour le moment.</p>
+    {% else %}
+      <ul class="space-y-3">
+        {% for e in entreprises %}
+          <li>
+            <form action="{% url 'entreprise_select' %}" method="post" class="block">
+              {% csrf_token %}
+              <input type="hidden" name="entreprise_id" value="{{ e.pk }}">
+              <button type="submit" class="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white px-4 py-4 text-left shadow-sm ring-1 ring-black/5 transition hover:border-slate-200 hover:shadow-md">
+                {% if e.logo %}
+                  <img src="{{ e.logo.url }}" alt="" class="h-12 w-12 shrink-0 rounded-2xl object-cover ring-1 ring-black/5">
+                {% else %}
+                  <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-black text-lg font-bold text-white">{{ e.nom|slice:":1"|upper }}</span>
+                {% endif %}
+                <div class="min-w-0 flex-1">
+                  <p class="font-semibold text-black">{{ e.nom }}</p>
+                  <p class="truncate text-xs text-slate-500">{{ e.pays }} · {{ e.secteur }}</p>
+                </div>
+                {% if active_entreprise and active_entreprise.pk == e.pk %}
+                  <span class="shrink-0 rounded-full bg-[#24ad60]/18 px-2.5 py-1 text-xs font-semibold text-[#15803d]">Active</span>
+                {% else %}
+                  <span class="shrink-0 text-xs font-semibold text-slate-400" aria-hidden="true">›</span>
+                {% endif %}
+              </button>
+            </form>
+          </li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endblock %}

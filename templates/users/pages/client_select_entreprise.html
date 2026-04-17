@@ -1,0 +1,21 @@
+{% extends "base_client_app.html" %}
+{% block title %}Choisir une entreprise — Espace client{% endblock %}
+{% block content %}
+  <section class="app-surface-card p-6 sm:p-7">
+    <h1 class="text-xl font-bold text-black sm:text-2xl">Vos entreprises</h1>
+    <p class="mt-2 text-sm text-slate-600">Sélectionnez l’entreprise pour laquelle vous consultez le portail.</p>
+    <form method="post" class="mt-8 space-y-3">
+      {% csrf_token %}
+      {% for e in entreprises %}
+        <label class="flex cursor-pointer items-center gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm has-[:checked]:border-black has-[:checked]:ring-2 has-[:checked]:ring-black/15">
+          <input type="radio" name="entreprise_id" value="{{ e.pk }}" class="h-4 w-4 border-slate-300 text-black focus:ring-black/20" required>
+          <div class="min-w-0 flex-1 text-left">
+            <p class="font-semibold text-black">{{ e.nom }}</p>
+            <p class="text-xs text-slate-500">{{ e.pays }}</p>
+          </div>
+        </label>
+      {% endfor %}
+      <button type="submit" class="mt-6 w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:bg-neutral-800">Continuer</button>
+    </form>
+  </section>
+{% endblock %}

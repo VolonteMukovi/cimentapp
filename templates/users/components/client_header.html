@@ -1,0 +1,29 @@
+{% if portal_client %}
+<header class="app-header-fixed fixed inset-x-0 top-0 z-40 border-b border-slate-200/90 bg-white/90 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl">
+  <div class="mx-auto flex max-w-lg items-center justify-between gap-3 sm:max-w-xl lg:max-w-2xl">
+    <a href="{% url 'client_portal_home' %}" class="flex min-w-0 flex-1 items-center gap-3 rounded-2xl py-1 pr-2 transition hover:bg-slate-50" title="Accueil portail client">
+      <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black text-sm font-bold text-white shadow-md ring-1 ring-black/5" aria-hidden="true">{{ portal_client.header_avatar_initial }}</span>
+      <div class="min-w-0 flex-1 text-left">
+        <p class="truncate text-sm font-semibold leading-tight text-black">{{ portal_client.nom }}</p>
+        <p class="mt-0.5 truncate text-xs font-medium leading-tight text-slate-500">
+          Portail client{% if portal_entreprise %} · {{ portal_entreprise.nom }}{% endif %}
+        </p>
+      </div>
+    </a>
+    <div class="flex shrink-0 items-center gap-2">
+      <a href="{% url 'client_entreprise_select' %}" class="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50" title="Changer d’entreprise" aria-label="Changer d’entreprise">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+      </a>
+      <button type="button" class="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50" title="Notifications (à venir)" aria-label="Notifications">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+      </button>
+      <form action="{% url 'client_logout' %}" method="post" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-700" title="Déconnexion" aria-label="Déconnexion">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </button>
+      </form>
+    </div>
+  </div>
+</header>
+{% endif %}

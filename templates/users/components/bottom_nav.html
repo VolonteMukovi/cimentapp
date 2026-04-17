@@ -1,0 +1,18 @@
+{% with name=request.resolver_match.url_name %}
+{% if staff_nav_items %}
+<nav class="app-bottom-nav-dock pointer-events-none fixed inset-x-0 bottom-0 flex justify-center px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2" aria-label="Navigation principale">
+  <div class="pointer-events-auto flex w-full max-w-lg items-stretch rounded-[1.35rem] bg-black py-2 pl-2 pr-1 shadow-2xl shadow-black/35 ring-1 ring-white/10 sm:pl-3">
+    <div class="flex min-w-0 flex-1 gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-1 [&::-webkit-scrollbar]:hidden">
+      {% for item in staff_nav_items %}
+      <a href="{% url item.url_name %}" class="flex min-w-[3.25rem] max-w-[5.5rem] flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1.5 text-center transition sm:min-w-[3.5rem] sm:px-2 {% if name in item.match %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" {% if name in item.match %}aria-current="page"{% endif %} title="{{ item.label }}">
+        <svg class="h-5 w-5 shrink-0 sm:h-6 sm:w-6 {% if name in item.match %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ item.path_d }}"/>
+        </svg>
+        <span class="max-w-full truncate text-[9px] font-medium leading-tight tracking-tight sm:text-[11px] {% if name in item.match %}font-semibold text-black{% else %}text-white/45 hover:text-white/65{% endif %}">{{ item.label }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</nav>
+{% endif %}
+{% endwith %}

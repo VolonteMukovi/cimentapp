@@ -1,0 +1,937 @@
+{% extends "base_app.html" %}
+{% block title %}Articles — CimentApp{% endblock %}
+{% block extra_head %}
+<style>
+  .art-input {
+    margin-top: 0.25rem;
+    display: block;
+    width: 100%;
+    border-radius: 1rem;
+    border: 1px solid rgb(226 232 240);
+    background: #fff;
+    padding: 0.65rem 1rem;
+    font-size: 0.875rem;
+    color: #0f172a;
+    box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .art-input:focus {
+    outline: none;
+    border-color: #000;
+    box-shadow: 0 0 0 3px rgba(0,0,0,.08);
+  }
+  .art-modal-overlay { z-index: 200; align-items: flex-end; justify-content: center; }
+  @media (min-width: 640px) {
+    .art-modal-overlay { align-items: center; padding: 1rem; }
+  }
+  .art-modal-panel { max-height: min(90vh, 820px); }
+  .art-img-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    gap: 0.65rem;
+  }
+  .art-img-tile {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    border: 2px solid rgb(226 232 240);
+    background: #f8fafc;
+  }
+  .art-img-tile.is-main {
+    border-color: #000;
+    box-shadow: 0 0 0 2px rgba(0,0,0,.12);
+  }
+  .art-img-tile img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .art-img-tile__actions {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    padding: 0.25rem;
+    background: linear-gradient(to top, rgba(0,0,0,.65), transparent);
+  }
+  .art-img-tile__actions button {
+    font-size: 0.65rem;
+    line-height: 1;
+    padding: 0.2rem 0.35rem;
+    border-radius: 0.35rem;
+    border: 0;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .art-img-tile__btn-main { background: #fff; color: #000; }
+  .art-img-tile__btn-main:hover { background: #e2e8f0; }
+  .art-img-tile__btn-del { background: rgba(220,38,38,.95); color: #fff; }
+  .art-img-tile__btn-del:hover { background: #b91c1c; }
+  .art-thumb-strip {
+    display: flex;
+    max-width: 14rem;
+    gap: 0.25rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+  .art-thumb-strip img {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.5rem;
+    object-fit: cover;
+    border: 1px solid rgb(226 232 240);
+  }
+  .art-thumb-strip img.is-main-ring {
+    outline: 2px solid #000;
+    outline-offset: 1px;
+  }
+  .art-thumb-btn {
+    flex-shrink: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: zoom-in;
+    background: transparent;
+    line-height: 0;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .art-thumb-btn:hover {
+    transform: scale(1.06);
+    box-shadow: 0 4px 14px rgba(0,0,0,.12);
+  }
+  .art-thumb-btn:focus-visible {
+    outline: 2px solid #000;
+    outline-offset: 2px;
+  }
+  .art-stat-card {
+    border-radius: 1rem;
+    border: 1px solid rgb(241 245 249);
+    padding: 1.1rem 1.25rem;
+    background: linear-gradient(145deg, #fff 0%, #f8fafc 100%);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  }
+  .art-toolbar {
+    background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+  }
+  .art-lightbox {
+    z-index: 280;
+  }
+  .art-lightbox__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 9999px;
+    border: 1px solid rgba(255,255,255,.25);
+    background: rgba(0,0,0,.45);
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .art-lightbox__nav:hover { background: rgba(255,255,255,.2); }
+  .art-lightbox__nav:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+</style>
+{% endblock %}
+{% block content %}
+<section id="articles-app-root" class="app-surface-card p-5 sm:p-6" data-media-url="{{ MEDIA_URL }}">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Articles</h1>
+      <p class="mt-1 text-sm text-slate-600">Catalogue, filtres et statistiques sur le périmètre actuel. Cliquez sur une miniature pour l’agrandir et naviguer entre les photos.</p>
+      <p class="mt-2 text-xs font-medium text-slate-500"><span class="font-semibold text-slate-800">{{ total_filtered }}</span> résultat{% if total_filtered != 1 %}s{% endif %} avec les critères actuels</p>
+    </div>
+    <button type="button" id="btn-open-create" class="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-black px-5 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800">
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+      Nouvel article
+    </button>
+  </div>
+
+  {% if user.is_superadmin_role and not active_entreprise %}
+  <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+    <strong>Super administrateur :</strong> aucune entreprise active — la création d’articles est désactivée jusqu’à la sélection d’une entreprise. Vous pouvez filtrer la liste par <span class="font-mono">entreprise_id</span> ci-dessous.
+  </div>
+  {% endif %}
+
+  <div class="mt-6 grid gap-4 sm:grid-cols-3">
+    <div class="art-stat-card flex gap-4">
+      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Total articles</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight text-slate-900">{{ stats.total }}</p>
+        <p class="mt-0.5 text-xs text-slate-500">Périmètre entreprise actif</p>
+      </div>
+    </div>
+    <div class="art-stat-card flex gap-4 border-emerald-100/80 bg-gradient-to-br from-white to-emerald-50/40">
+      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-white">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-emerald-800/80">Avec visuels</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight text-emerald-950">{{ stats.with_images }}</p>
+        <p class="mt-0.5 text-xs text-emerald-800/70">{% if stats.total %}≈ {% widthratio stats.with_images stats.total 100 %}&nbsp;% du catalogue{% else %}—{% endif %}</p>
+      </div>
+    </div>
+    <div class="art-stat-card flex gap-4 border-indigo-100/80 bg-gradient-to-br from-white to-indigo-50/50">
+      <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-indigo-800/80">Ajouts récents</p>
+        <p class="mt-1 text-2xl font-bold tracking-tight text-indigo-950">{{ stats.recent }}</p>
+        <p class="mt-0.5 text-xs text-indigo-800/70">7 derniers jours</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-6 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+    <div class="art-toolbar border-b border-slate-200/80 px-4 py-4 sm:px-5 sm:py-5">
+      <form method="get" id="filter-form" class="space-y-4">
+        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white" aria-hidden="true">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+            </span>
+            Filtres &amp; tri
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="inline-flex items-center gap-2 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-neutral-800">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              Appliquer
+            </button>
+            <a href="{% url 'store_articles' %}" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Réinitialiser</a>
+          </div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div class="lg:col-span-2">
+            <label for="q" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+              Recherche
+            </label>
+            <input type="search" name="q" id="q" value="{{ search_q }}" placeholder="Nom ou identifiant article…" class="art-input" autocomplete="off">
+          </div>
+          <div>
+            <label for="sous_type" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+              Sous-type
+            </label>
+            <select name="sous_type" id="sous_type" class="art-input">
+              <option value="">Tous</option>
+              {% for st in sous_types %}
+              <option value="{{ st.id }}" {% if filter_sous_type == st.id|stringformat:"s" %}selected{% endif %}>{{ st.libelle }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="unite" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+              Unité
+            </label>
+            <select name="unite" id="unite" class="art-input">
+              <option value="">Toutes</option>
+              {% for u in unites %}
+              <option value="{{ u.id }}" {% if filter_unite == u.id|stringformat:"s" %}selected{% endif %}>{{ u.libelle }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="sort" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
+              Tri
+            </label>
+            <select name="sort" id="sort" class="art-input">
+              <option value="nom" {% if filter_sort == "nom" %}selected{% endif %}>Nom (A → Z)</option>
+              <option value="nom_desc" {% if filter_sort == "nom_desc" %}selected{% endif %}>Nom (Z → A)</option>
+              <option value="recent" {% if filter_sort == "recent" %}selected{% endif %}>Plus récents</option>
+              <option value="oldest" {% if filter_sort == "oldest" %}selected{% endif %}>Plus anciens</option>
+            </select>
+          </div>
+          {% if user.is_superadmin_role %}
+          <div>
+            <label for="entreprise" class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <svg class="h-3.5 w-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+              Entreprise (id)
+            </label>
+            <input type="number" name="entreprise" id="entreprise" min="1" value="{{ filter_entreprise }}" placeholder="Filtrer" class="art-input">
+          </div>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+  {% if article_rows %}
+  <div class="hidden overflow-x-auto md:block">
+    <table class="w-full min-w-[640px] text-left text-sm">
+      <thead class="border-b border-slate-200 bg-slate-50/90 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Images</th>
+          <th class="px-4 py-3">Article</th>
+          <th class="px-4 py-3">Sous-type</th>
+          <th class="px-4 py-3">Unité</th>
+          {% if user.is_superadmin_role %}<th class="px-4 py-3">Entr.</th>{% endif %}
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in article_rows %}
+        {% with a=row.article %}
+        <tr class="transition hover:bg-slate-50/80">
+          <td class="px-4 py-3 align-top">
+            {% if a.images %}
+            <div class="art-thumb-strip">
+              {% for im in a.images %}
+              <button type="button" class="art-thumb-btn" data-lightbox-aid="{{ a.article_id }}" data-lightbox-idx="{{ forloop.counter0 }}" title="Agrandir" aria-label="Agrandir l’image {{ forloop.counter }}">
+                <img src="{{ MEDIA_URL }}{{ im.image }}" alt="" class="h-10 w-10 rounded-lg object-cover {% if im.is_main %}is-main-ring{% endif %}" loading="lazy" width="40" height="40">
+              </button>
+              {% endfor %}
+            </div>
+            <p class="mt-1 text-[10px] text-slate-500">{{ a.images|length }} image{% if a.images|length != 1 %}s{% endif %} · clic pour agrandir</p>
+            {% else %}
+            <span class="text-slate-400">Aucune image</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <p class="font-semibold text-black">{{ a.nom|truncatechars:64 }}</p>
+            <p class="mt-0.5 font-mono text-[10px] text-slate-400">{{ a.article_id }}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-700">{{ row.sous_type_libelle }}</td>
+          <td class="px-4 py-3 text-slate-700">{{ row.unite_libelle }}</td>
+          {% if user.is_superadmin_role %}<td class="px-4 py-3 font-mono text-xs text-slate-600">{{ a.entreprise_id }}</td>{% endif %}
+          <td class="px-4 py-3 text-right">
+            <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 transition hover:border-black hover:text-black btn-edit" data-id="{{ a.article_id }}">Modifier</button>
+          </td>
+        </tr>
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="divide-y divide-slate-100 md:hidden">
+    {% for row in article_rows %}
+    {% with a=row.article %}
+    <article class="p-4">
+      <div class="flex gap-3">
+        {% if a.images %}
+        <div class="art-thumb-strip max-w-[48%] shrink-0">
+          {% for im in a.images %}
+          <button type="button" class="art-thumb-btn" data-lightbox-aid="{{ a.article_id }}" data-lightbox-idx="{{ forloop.counter0 }}" title="Agrandir" aria-label="Agrandir l’image">
+            <img src="{{ MEDIA_URL }}{{ im.image }}" alt="" class="h-11 w-11 rounded-lg object-cover {% if im.is_main %}is-main-ring{% endif %}" loading="lazy" width="44" height="44">
+          </button>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <p class="font-semibold text-black">{{ a.nom|truncatechars:80 }}</p>
+          <p class="mt-1 font-mono text-[10px] text-slate-400">{{ a.article_id }}</p>
+          {% if a.images %}<p class="mt-1 text-[10px] text-slate-500">{{ a.images|length }} image{% if a.images|length != 1 %}s{% endif %}</p>{% endif %}
+          <dl class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
+            <div><dt class="text-slate-400">Sous-type</dt><dd>{{ row.sous_type_libelle }}</dd></div>
+            <div><dt class="text-slate-400">Unité</dt><dd>{{ row.unite_libelle }}</dd></div>
+            {% if user.is_superadmin_role %}<div><dt class="text-slate-400">Entreprise</dt><dd class="font-mono">{{ a.entreprise_id }}</dd></div>{% endif %}
+          </dl>
+        </div>
+      </div>
+      <button type="button" class="mt-3 w-full rounded-full border border-slate-200 py-2 text-sm font-semibold text-slate-800 btn-edit" data-id="{{ a.article_id }}">Modifier</button>
+    </article>
+    {% endwith %}
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="p-10 text-center">
+    <p class="text-sm font-medium text-slate-600">Aucun article ne correspond aux critères.</p>
+    <p class="mt-2 text-xs text-slate-500">Créez un premier article ou modifiez les filtres.</p>
+  </div>
+  {% endif %}
+
+  {% if page_obj.has_other_pages %}
+  <nav class="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm" aria-label="Pagination">
+    <span class="text-slate-500">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    <div class="flex gap-2">
+      {% if page_obj.has_previous %}
+      <a class="rounded-full border border-slate-200 px-3 py-1.5 font-semibold text-slate-800 hover:bg-slate-50" href="{{ pagination_prefix }}page={{ page_obj.previous_page_number }}">Précédent</a>
+      {% endif %}
+      {% if page_obj.has_next %}
+      <a class="rounded-full bg-black px-3 py-1.5 font-semibold text-white hover:bg-neutral-800" href="{{ pagination_prefix }}page={{ page_obj.next_page_number }}">Suivant</a>
+      {% endif %}
+    </div>
+  </nav>
+  {% endif %}
+  </div>
+
+  {{ article_galleries_json|json_script:"article-galleries-data" }}
+
+  <div id="art-lightbox" class="art-lightbox fixed inset-0 z-[280] flex flex-col text-white" style="display:none" role="dialog" aria-modal="true" aria-labelledby="art-lightbox-title">
+    <div id="art-lightbox-backdrop" class="absolute inset-0 bg-black/90" aria-hidden="true"></div>
+    <div class="relative z-10 flex min-h-0 flex-1 flex-col">
+      <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-3 sm:px-5">
+        <p id="art-lightbox-title" class="min-w-0 flex-1 truncate text-sm font-semibold sm:text-base"></p>
+        <button type="button" id="art-lightbox-close" class="shrink-0 rounded-full p-2.5 text-white/90 transition hover:bg-white/10" aria-label="Fermer l’aperçu">✕</button>
+      </div>
+      <div class="relative flex min-h-0 flex-1 items-center justify-center px-14 sm:px-20">
+        <button type="button" id="art-lightbox-prev" class="art-lightbox__nav left-2 sm:left-4" aria-label="Image précédente">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <img id="art-lightbox-img" src="" alt="" class="max-h-[min(85vh,920px)] max-w-[min(96vw,1200px)] rounded-lg object-contain shadow-2xl">
+        <button type="button" id="art-lightbox-next" class="art-lightbox__nav right-2 sm:right-4" aria-label="Image suivante">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </div>
+      <p id="art-lightbox-counter" class="shrink-0 pb-4 pt-1 text-center text-xs text-white/65"></p>
+    </div>
+  </div>
+</section>
+
+<div id="modal-create" class="art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-create-title" aria-modal="true">
+  <div class="art-modal-panel mt-auto w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
+    <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
+      <h2 id="modal-create-title" class="text-lg font-bold text-black">Nouvel article</h2>
+      <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-close" data-close="modal-create" aria-label="Fermer">✕</button>
+    </div>
+    <form id="form-create-article" method="post" action="{% url 'article_create' %}" enctype="multipart/form-data" class="space-y-4 px-5 py-5">
+      {% csrf_token %}
+      <input type="hidden" name="create-existing_images_json" id="create-existing_images_json" value="[]">
+      <input type="hidden" name="create-main_image_index" id="create-main_image_index" value="0">
+      {% for field in form_create %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}{% if field.field.required %}<span class="text-red-600">*</span>{% endif %}</label>
+        {{ field }}
+        {% if field.errors %}<ul class="mt-1 text-sm font-medium text-red-600">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+        <p class="text-sm font-semibold text-black">Images de l’article</p>
+        <p class="mt-1 text-xs text-slate-500">Ajoutez une ou plusieurs photos. Cliquez sur « Principale » pour l’image affichée en tête ; « Retirer » enlève une photo avant enregistrement.</p>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="create-image_files">Ajouter des fichiers</label>
+        <input type="file" name="create-image_files" id="create-image_files" class="art-input" accept="image/*" multiple>
+        <div id="create-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
+        <p id="create-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image sélectionnée — utilisez le champ ci-dessus pour en ajouter.</p>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-create">Annuler</button>
+        <button type="submit" class="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-edit" class="art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-edit-title" aria-modal="true">
+  <div class="art-modal-panel mt-auto w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
+    <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
+      <h2 id="modal-edit-title" class="text-lg font-bold text-black">Modifier l’article</h2>
+      <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-close" data-close="modal-edit" aria-label="Fermer">✕</button>
+    </div>
+    <form id="form-edit-article" method="post" action="" enctype="multipart/form-data" class="space-y-4 px-5 py-5">
+      {% csrf_token %}
+      <input type="hidden" name="edit-existing_images_json" id="edit-existing_images_json" value="[]">
+      <input type="hidden" name="edit-main_image_index" id="edit-main_image_index" value="0">
+      {% for field in form_edit %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}{% if field.field.required %}<span class="text-red-600">*</span>{% endif %}</label>
+        {{ field }}
+        {% if field.errors %}<ul class="mt-1 text-sm font-medium text-red-600">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+        <p class="text-sm font-semibold text-black">Images de l’article</p>
+        <p class="mt-1 text-xs text-slate-500">Images déjà enregistrées et nouveaux fichiers : aperçu, retrait, choix de l’image principale.</p>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="edit-image_files">Ajouter des fichiers</label>
+        <input type="file" name="edit-image_files" id="edit-image_files" class="art-input" accept="image/*" multiple>
+        <div id="edit-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
+        <p id="edit-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image — ajoutez-en avec le champ ci-dessus.</p>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2 pt-2">
+        <button type="button" id="btn-open-delete" class="rounded-full border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50">Supprimer…</button>
+        <div class="flex gap-2">
+          <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-edit">Annuler</button>
+          <button type="submit" class="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800">Mettre à jour</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="modal-delete" class="art-modal-overlay fixed inset-0 flex items-center justify-center bg-black/45 p-4" style="display:none" role="dialog" aria-modal="true">
+  <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <h3 class="text-lg font-bold text-black">Supprimer cet article ?</h3>
+    <p class="mt-2 text-sm text-slate-600">Cette action est définitive.</p>
+    <form id="form-delete-article" method="post" action="" class="mt-6 flex justify-end gap-2">
+      {% csrf_token %}
+      <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-delete">Annuler</button>
+      <button type="submit" class="rounded-full bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700">Supprimer</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var root = document.getElementById('articles-app-root');
+  var mediaUrl = (root && root.dataset.mediaUrl) ? root.dataset.mediaUrl : '/media/';
+  if (mediaUrl.slice(-1) !== '/') mediaUrl += '/';
+
+  var base = '/magasin/articles';
+
+  var createPhotoItems = [];
+  var createMainIndex = 0;
+
+  var editExisting = [];
+  var editNewItems = [];
+  var editMainIndex = 0;
+
+  function openModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = 'flex';
+    el.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  function revokeCreateUrls() {
+    createPhotoItems.forEach(function (x) {
+      if (x.url) URL.revokeObjectURL(x.url);
+    });
+    createPhotoItems = [];
+  }
+
+  function resetCreatePhotos() {
+    revokeCreateUrls();
+    createMainIndex = 0;
+    var hid = document.getElementById('create-main_image_index');
+    if (hid) hid.value = '0';
+    var fi = document.getElementById('create-image_files');
+    if (fi) fi.value = '';
+    renderCreateGallery();
+  }
+
+  function renderCreateGallery() {
+    var wrap = document.getElementById('create-image-gallery');
+    var empty = document.getElementById('create-gallery-empty');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (createPhotoItems.length === 0) {
+      if (empty) { empty.classList.remove('hidden'); }
+      return;
+    }
+    if (empty) empty.classList.add('hidden');
+    if (createMainIndex >= createPhotoItems.length) createMainIndex = 0;
+    var hid = document.getElementById('create-main_image_index');
+    if (hid) hid.value = String(createMainIndex);
+    createPhotoItems.forEach(function (item, i) {
+      var tile = document.createElement('div');
+      tile.className = 'art-img-tile' + (i === createMainIndex ? ' is-main' : '');
+      var img = document.createElement('img');
+      img.src = item.url;
+      img.alt = '';
+      tile.appendChild(img);
+      var bar = document.createElement('div');
+      bar.className = 'art-img-tile__actions';
+      var bMain = document.createElement('button');
+      bMain.type = 'button';
+      bMain.className = 'art-img-tile__btn-main';
+      bMain.textContent = 'Principale';
+      bMain.addEventListener('click', function () {
+        createMainIndex = i;
+        renderCreateGallery();
+      });
+      var bDel = document.createElement('button');
+      bDel.type = 'button';
+      bDel.className = 'art-img-tile__btn-del';
+      bDel.textContent = 'Retirer';
+      bDel.addEventListener('click', function () {
+        if (item.url) URL.revokeObjectURL(item.url);
+        createPhotoItems.splice(i, 1);
+        if (createPhotoItems.length === 0) createMainIndex = 0;
+        else if (createMainIndex >= createPhotoItems.length) createMainIndex = createPhotoItems.length - 1;
+        renderCreateGallery();
+      });
+      bar.appendChild(bMain);
+      bar.appendChild(bDel);
+      tile.appendChild(bar);
+      wrap.appendChild(tile);
+    });
+  }
+
+  function syncCreateFileInput() {
+    var input = document.getElementById('create-image_files');
+    if (!input || !createPhotoItems.length) return;
+    var dt = new DataTransfer();
+    createPhotoItems.forEach(function (x) { dt.items.add(x.file); });
+    input.files = dt.files;
+  }
+
+  function revokeEditNewUrls() {
+    editNewItems.forEach(function (x) {
+      if (x.url) URL.revokeObjectURL(x.url);
+    });
+    editNewItems = [];
+  }
+
+  function syncEditExistingJson() {
+    var hid = document.getElementById('edit-existing_images_json');
+    if (!hid) return;
+    var payload = editExisting.map(function (e) {
+      return { image: e.image, is_main: false };
+    });
+    hid.value = JSON.stringify(payload);
+  }
+
+  function mergedEditLength() {
+    return editExisting.length + editNewItems.length;
+  }
+
+  function clampEditMain() {
+    var t = mergedEditLength();
+    if (t === 0) editMainIndex = 0;
+    else if (editMainIndex >= t) editMainIndex = t - 1;
+    else if (editMainIndex < 0) editMainIndex = 0;
+    var hid = document.getElementById('edit-main_image_index');
+    if (hid) hid.value = String(editMainIndex);
+  }
+
+  function renderEditGallery() {
+    var wrap = document.getElementById('edit-image-gallery');
+    var empty = document.getElementById('edit-gallery-empty');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    clampEditMain();
+    syncEditExistingJson();
+    var total = mergedEditLength();
+    if (total === 0) {
+      if (empty) empty.classList.remove('hidden');
+      return;
+    }
+    if (empty) empty.classList.add('hidden');
+
+    editExisting.forEach(function (e, i) {
+      var globalIdx = i;
+      var tile = document.createElement('div');
+      tile.className = 'art-img-tile' + (globalIdx === editMainIndex ? ' is-main' : '');
+      var img = document.createElement('img');
+      img.src = mediaUrl + e.image.replace(/^\//, '');
+      img.alt = '';
+      tile.appendChild(img);
+      var bar = document.createElement('div');
+      bar.className = 'art-img-tile__actions';
+      var bMain = document.createElement('button');
+      bMain.type = 'button';
+      bMain.className = 'art-img-tile__btn-main';
+      bMain.textContent = 'Principale';
+      bMain.addEventListener('click', function () {
+        editMainIndex = globalIdx;
+        renderEditGallery();
+      });
+      var bDel = document.createElement('button');
+      bDel.type = 'button';
+      bDel.className = 'art-img-tile__btn-del';
+      bDel.textContent = 'Retirer';
+      bDel.addEventListener('click', function () {
+        editExisting.splice(i, 1);
+        clampEditMain();
+        renderEditGallery();
+      });
+      bar.appendChild(bMain);
+      bar.appendChild(bDel);
+      tile.appendChild(bar);
+      wrap.appendChild(tile);
+    });
+
+    editNewItems.forEach(function (item, j) {
+      var globalIdx = editExisting.length + j;
+      var tile = document.createElement('div');
+      tile.className = 'art-img-tile' + (globalIdx === editMainIndex ? ' is-main' : '');
+      var img = document.createElement('img');
+      img.src = item.url;
+      img.alt = '';
+      tile.appendChild(img);
+      var bar = document.createElement('div');
+      bar.className = 'art-img-tile__actions';
+      var bMain = document.createElement('button');
+      bMain.type = 'button';
+      bMain.className = 'art-img-tile__btn-main';
+      bMain.textContent = 'Principale';
+      bMain.addEventListener('click', function () {
+        editMainIndex = globalIdx;
+        renderEditGallery();
+      });
+      var bDel = document.createElement('button');
+      bDel.type = 'button';
+      bDel.className = 'art-img-tile__btn-del';
+      bDel.textContent = 'Retirer';
+      bDel.addEventListener('click', function () {
+        if (item.url) URL.revokeObjectURL(item.url);
+        editNewItems.splice(j, 1);
+        clampEditMain();
+        renderEditGallery();
+      });
+      bar.appendChild(bMain);
+      bar.appendChild(bDel);
+      tile.appendChild(bar);
+      wrap.appendChild(tile);
+    });
+  }
+
+  function syncEditFileInput() {
+    var input = document.getElementById('edit-image_files');
+    if (!input) return;
+    var dt = new DataTransfer();
+    editNewItems.forEach(function (x) { dt.items.add(x.file); });
+    input.files = dt.files;
+  }
+
+  var lightboxEl = document.getElementById('art-lightbox');
+  var lightboxImg = document.getElementById('art-lightbox-img');
+  var lightboxTitle = document.getElementById('art-lightbox-title');
+  var lightboxCounter = document.getElementById('art-lightbox-counter');
+  var lightboxPrev = document.getElementById('art-lightbox-prev');
+  var lightboxNext = document.getElementById('art-lightbox-next');
+  var lightboxBackdrop = document.getElementById('art-lightbox-backdrop');
+  var lightboxClose = document.getElementById('art-lightbox-close');
+  var galleryData = {};
+  try {
+    var gScript = document.getElementById('article-galleries-data');
+    if (gScript && gScript.textContent) galleryData = JSON.parse(gScript.textContent);
+  } catch (err1) {}
+
+  var lbSlides = [];
+  var lbIndex = 0;
+
+  function isLightboxOpen() {
+    return lightboxEl && lightboxEl.style.display === 'flex';
+  }
+
+  function closeLightbox() {
+    if (!lightboxEl) return;
+    lightboxEl.style.display = 'none';
+    lightboxEl.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('overflow-hidden');
+    if (lightboxImg) lightboxImg.removeAttribute('src');
+  }
+
+  function renderLightboxSlide() {
+    if (!lightboxImg || !lbSlides.length) return;
+    var s = lbSlides[lbIndex];
+    lightboxImg.src = s.src;
+    lightboxImg.alt = s.alt || '';
+    if (lightboxTitle) lightboxTitle.textContent = s.alt || 'Aperçu';
+    if (lightboxCounter) {
+      lightboxCounter.textContent = (lbIndex + 1) + ' / ' + lbSlides.length + (s.main ? ' · image principale' : '');
+    }
+    if (lightboxPrev) lightboxPrev.disabled = lbIndex <= 0;
+    if (lightboxNext) lightboxNext.disabled = lbIndex >= lbSlides.length - 1;
+  }
+
+  function openLightbox(aid, idx) {
+    var slides = galleryData[aid] || [];
+    if (!slides.length || !lightboxEl) return;
+    var i = parseInt(idx, 10);
+    if (isNaN(i)) i = 0;
+    i = Math.max(0, Math.min(i, slides.length - 1));
+    lbSlides = slides;
+    lbIndex = i;
+    lightboxEl.style.display = 'flex';
+    lightboxEl.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('overflow-hidden');
+    renderLightboxSlide();
+  }
+
+  function stepLightbox(delta) {
+    if (!lbSlides.length) return;
+    var n = lbIndex + delta;
+    if (n < 0 || n >= lbSlides.length) return;
+    lbIndex = n;
+    renderLightboxSlide();
+  }
+
+  if (root) {
+    root.addEventListener('click', function (e) {
+      var btn = e.target.closest('.art-thumb-btn');
+      if (!btn) return;
+      var aid = btn.getAttribute('data-lightbox-aid');
+      var idx = btn.getAttribute('data-lightbox-idx');
+      if (aid) openLightbox(aid, idx);
+    });
+  }
+
+  if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+  if (lightboxBackdrop) lightboxBackdrop.addEventListener('click', closeLightbox);
+  if (lightboxPrev) lightboxPrev.addEventListener('click', function () { stepLightbox(-1); });
+  if (lightboxNext) lightboxNext.addEventListener('click', function () { stepLightbox(1); });
+
+  document.querySelectorAll('.art-close').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      closeModal(btn.getAttribute('data-close'));
+    });
+  });
+
+  var btnCreate = document.getElementById('btn-open-create');
+  if (btnCreate) {
+    btnCreate.addEventListener('click', function () {
+      resetCreatePhotos();
+      openModal('modal-create');
+    });
+  }
+
+  var createFileInput = document.getElementById('create-image_files');
+  if (createFileInput) {
+    createFileInput.addEventListener('change', function (ev) {
+      var list = ev.target.files;
+      if (!list || !list.length) return;
+      for (var i = 0; i < list.length; i++) {
+        var f = list[i];
+        createPhotoItems.push({ file: f, url: URL.createObjectURL(f) });
+      }
+      ev.target.value = '';
+      if (createPhotoItems.length === 1) createMainIndex = 0;
+      renderCreateGallery();
+    });
+  }
+
+  var formCreate = document.getElementById('form-create-article');
+  if (formCreate) {
+    formCreate.addEventListener('submit', function () {
+      syncCreateFileInput();
+    });
+  }
+
+  ['modal-create', 'modal-edit', 'modal-delete'].forEach(function (mid) {
+    var el = document.getElementById(mid);
+    if (!el) return;
+    el.addEventListener('click', function (e) {
+      if (e.target === el) closeModal(mid);
+    });
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (isLightboxOpen()) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeLightbox();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepLightbox(-1);
+        return;
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepLightbox(1);
+        return;
+      }
+    }
+    if (e.key === 'Escape') {
+      ['modal-create', 'modal-edit', 'modal-delete'].forEach(closeModal);
+    }
+  });
+
+  var editFileInput = document.getElementById('edit-image_files');
+  if (editFileInput) {
+    editFileInput.addEventListener('change', function (ev) {
+      var list = ev.target.files;
+      if (!list || !list.length) return;
+      for (var i = 0; i < list.length; i++) {
+        var f = list[i];
+        editNewItems.push({ file: f, url: URL.createObjectURL(f) });
+      }
+      ev.target.value = '';
+      clampEditMain();
+      renderEditGallery();
+    });
+  }
+
+  var formEdit = document.getElementById('form-edit-article');
+  if (formEdit) {
+    formEdit.addEventListener('submit', function () {
+      syncEditFileInput();
+    });
+  }
+
+  function setSelectValue(select, value) {
+    if (!select) return;
+    var v = String(value);
+    for (var i = 0; i < select.options.length; i++) {
+      if (select.options[i].value === v) {
+        select.selectedIndex = i;
+        return;
+      }
+    }
+  }
+
+  document.querySelectorAll('.btn-edit').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-id');
+      if (!id) return;
+      fetch(base + '/' + encodeURIComponent(id) + '/api/', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok || !data.article) return;
+          var a = data.article;
+          var form = document.getElementById('form-edit-article');
+          if (!form) return;
+          revokeEditNewUrls();
+          editExisting = [];
+          if (Array.isArray(a.images)) {
+            a.images.forEach(function (raw) {
+              if (raw && typeof raw === 'object' && raw.image) {
+                editExisting.push({ image: String(raw.image).trim() });
+              }
+            });
+          }
+          editMainIndex = 0;
+          if (editExisting.length && Array.isArray(a.images)) {
+            for (var k = 0; k < a.images.length; k++) {
+              if (a.images[k] && a.images[k].is_main) {
+                editMainIndex = k;
+                break;
+              }
+            }
+          }
+          var hidMain = document.getElementById('edit-main_image_index');
+          if (hidMain) hidMain.value = String(editMainIndex);
+          form.setAttribute('action', base + '/' + encodeURIComponent(a.article_id) + '/modifier/');
+          form.querySelector('[name="edit-nom"]').value = a.nom || '';
+          setSelectValue(form.querySelector('[name="edit-sous_type_article_id"]'), a.sous_type_article_id);
+          setSelectValue(form.querySelector('[name="edit-unite_id"]'), a.unite_id);
+          var fi = document.getElementById('edit-image_files');
+          if (fi) fi.value = '';
+          renderEditGallery();
+          var delForm = document.getElementById('form-delete-article');
+          if (delForm) delForm.setAttribute('action', base + '/' + encodeURIComponent(a.article_id) + '/supprimer/');
+          openModal('modal-edit');
+        })
+        .catch(function () {});
+    });
+  });
+
+  var btnDel = document.getElementById('btn-open-delete');
+  if (btnDel) {
+    btnDel.addEventListener('click', function () {
+      closeModal('modal-edit');
+      openModal('modal-delete');
+    });
+  }
+})();
+</script>
+{% endblock %}

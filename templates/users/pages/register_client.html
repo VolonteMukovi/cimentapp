@@ -1,0 +1,37 @@
+{% extends "base_auth.html" %}
+{% block title %}Créer un compte client — {{ entreprise.nom }}{% endblock %}
+{% block content %}
+  <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Compte client</h1>
+  <p class="mt-2 text-sm text-slate-600">Vous êtes invité à rejoindre <strong class="text-black">{{ entreprise.nom }}</strong>. Créez votre accès ou rattachez un compte existant avec le même e-mail.</p>
+  <form method="post" class="mt-8 space-y-5">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <div>
+      <label for="{{ form.nom.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.nom.label }}</label>
+      {{ form.nom }}
+      {% if form.nom.errors %}<ul class="mt-1 list-none text-sm font-medium text-red-600">{% for e in form.nom.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <div>
+      <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.email.label }}</label>
+      {{ form.email }}
+      {% if form.email.errors %}<ul class="mt-1 list-none text-sm font-medium text-red-600">{% for e in form.email.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <div>
+      <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password.label }}</label>
+      {{ form.password }}
+      {% if form.password.errors %}<ul class="mt-1 list-none text-sm font-medium text-red-600">{% for e in form.password.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <div>
+      <label for="{{ form.password_confirm.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password_confirm.label }}</label>
+      {{ form.password_confirm }}
+      {% if form.password_confirm.errors %}<ul class="mt-1 list-none text-sm font-medium text-red-600">{% for e in form.password_confirm.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    <button type="submit" class="w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/25 focus:ring-offset-2">Valider</button>
+  </form>
+  <p class="mt-8 text-center text-sm text-slate-600">
+    Déjà un compte client ?
+    <a href="{% url 'client_login' %}" class="font-semibold text-black underline decoration-slate-300 underline-offset-2 hover:decoration-black">Se connecter</a>
+  </p>
+{% endblock %}

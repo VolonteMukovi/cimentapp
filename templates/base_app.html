@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}CimentApp{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { sm: '576px', md: '768px', lg: '992px', xl: '1200px', '2xl': '1400px' },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="font-sans flex h-full flex-col overflow-x-hidden overflow-y-hidden app-shell-bg text-slate-900 antialiased">
+  {% if messages %}
+    <div class="fixed top-0 left-0 right-0 z-[60] px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pointer-events-none">
+      <div class="mx-auto max-w-lg space-y-2 pointer-events-auto">
+        {% for message in messages %}
+          <p class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-lg">{{ message }}</p>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% include "users/components/app_header.html" %}
+
+  <main class="app-main-below-fixed-header app-shell-scroll relative z-0 mx-auto w-full max-w-lg px-4 sm:max-w-xl lg:max-w-2xl">
+    {% block hero %}{% endblock %}
+    <div class="space-y-4 pb-4">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  {% include "users/components/bottom_nav.html" %}
+  <script src="{% static 'js/app.js' %}" defer></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

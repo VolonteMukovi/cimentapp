@@ -1,0 +1,44 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Connexion — CimentApp{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          screens: { sm: '576px', md: '768px', lg: '992px', xl: '1200px', '2xl': '1400px' },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">
+  <div class="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:py-14">
+    <a href="{% url 'home' %}" class="mb-8 flex items-center gap-2.5 text-black transition hover:opacity-90">
+      <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white shadow-md ring-1 ring-black/5" aria-hidden="true">C</span>
+      <span class="text-lg font-semibold tracking-tight">CimentApp</span>
+    </a>
+    <div class="app-surface-card w-full max-w-md p-6 sm:p-8">
+      {% if messages %}
+        <ul class="mb-5 space-y-2">
+          {% for message in messages %}
+            <li class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm">{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+    <p class="mt-8 text-center text-xs text-slate-500">© {% now "Y" %} CimentApp</p>
+  </div>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

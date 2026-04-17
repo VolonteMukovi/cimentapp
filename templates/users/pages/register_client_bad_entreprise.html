@@ -1,0 +1,9 @@
+{% extends "base_auth.html" %}
+{% block title %}Entreprise introuvable — CimentApp{% endblock %}
+{% block content %}
+  <h1 class="text-xl font-bold tracking-tight text-black">Entreprise introuvable</h1>
+  <p class="mt-3 text-sm text-slate-600">Ce lien d’invitation n’est pas valide ou l’entreprise n’existe plus. Demandez un nouveau lien à votre contact.</p>
+  <p class="mt-8 text-center text-sm">
+    <a href="{% url 'login' %}" class="font-semibold text-black underline decoration-slate-300 underline-offset-2 hover:decoration-black">Connexion équipe</a>
+  </p>
+{% endblock %}

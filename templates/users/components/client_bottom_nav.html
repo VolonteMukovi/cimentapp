@@ -1,0 +1,24 @@
+{% if portal_client %}
+{% with name=request.resolver_match.url_name %}
+<nav class="app-bottom-nav-dock pointer-events-none fixed inset-x-0 bottom-0 flex justify-center px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2" aria-label="Navigation portail client">
+  <div class="pointer-events-auto flex w-full max-w-md items-stretch justify-center gap-0.5 rounded-[1.35rem] bg-black px-1.5 py-2 shadow-2xl shadow-black/35 ring-1 ring-white/10 sm:gap-1 sm:px-2">
+    <a href="{% url 'client_portal_home' %}" class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center transition sm:px-1.5 {% if name == 'client_portal_home' %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" {% if name == 'client_portal_home' %}aria-current="page"{% endif %} title="Tableau de bord client">
+      <svg class="h-4 w-4 shrink-0 sm:h-5 sm:w-5 {% if name == 'client_portal_home' %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M4 10.5L12 4l8 6.5V20a1 1 0 01-1 1h-5v-7H10v7H5a1 1 0 01-1-1v-9.5z"/></svg>
+      <span class="max-w-full truncate text-[9px] font-medium leading-tight sm:text-[10px] {% if name == 'client_portal_home' %}font-semibold text-black{% else %}text-white/45 hover:text-white/65{% endif %}">Accueil</span>
+    </a>
+    <a href="{% url 'client_orders_sim' %}" class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center transition sm:px-1.5 {% if name == 'client_orders_sim' %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" title="Commandes">
+      <svg class="h-4 w-4 shrink-0 sm:h-5 sm:w-5 {% if name == 'client_orders_sim' %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+      <span class="max-w-full truncate text-[9px] font-medium leading-tight sm:text-[10px] {% if name == 'client_orders_sim' %}font-semibold text-black{% else %}text-white/45 hover:text-white/65{% endif %}">Commandes</span>
+    </a>
+    <a href="{% url 'client_transactions_sim' %}" class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center transition sm:px-1.5 {% if name == 'client_transactions_sim' %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" title="Historique des transactions">
+      <svg class="h-4 w-4 shrink-0 sm:h-5 sm:w-5 {% if name == 'client_transactions_sim' %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9h2m-2 4h2m-5-4h.01M9 16h.01"/></svg>
+      <span class="max-w-full truncate text-[9px] font-medium leading-tight sm:text-[10px] {% if name == 'client_transactions_sim' %}font-semibold text-black{% else %}text-white/45 hover:text-white/65{% endif %}">Transactions</span>
+    </a>
+    <a href="{% url 'client_wallet_sim' %}" class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-center transition sm:px-1.5 {% if name == 'client_wallet_sim' %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" title="Solde et garantie d’achat">
+      <svg class="h-4 w-4 shrink-0 sm:h-5 sm:w-5 {% if name == 'client_wallet_sim' %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      <span class="max-w-full truncate text-[9px] font-medium leading-tight sm:text-[10px] {% if name == 'client_wallet_sim' %}font-semibold text-black{% else %}text-white/45 hover:text-white/65{% endif %}">Garantie</span>
+    </a>
+  </div>
+</nav>
+{% endwith %}
+{% endif %}
