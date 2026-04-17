@@ -20,23 +20,21 @@ class UniteForm(forms.ModelForm):
 class TypeArticleForm(forms.ModelForm):
     class Meta:
         model = TypeArticle
-        fields = ('code', 'libelle', 'ordre', 'actif')
+        fields = ('libelle', 'description')
         widgets = {
-            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '64', 'autocomplete': 'off'}),
             'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
-            'ordre': forms.NumberInput(attrs={'class': 'art-input', 'min': '0'}),
+            'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
         }
 
 
 class SousTypeArticleForm(forms.ModelForm):
     class Meta:
         model = SousTypeArticle
-        fields = ('type_article_id', 'code', 'libelle', 'ordre', 'actif')
+        fields = ('type', 'libelle', 'description')
         widgets = {
-            'type_article_id': forms.NumberInput(attrs={'class': 'art-input', 'min': '1'}),
-            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '64', 'autocomplete': 'off'}),
             'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
-            'ordre': forms.NumberInput(attrs={'class': 'art-input', 'min': '0'}),
+            'type': forms.Select(attrs={'class': 'art-input'}),
+            'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
         }
 
 
@@ -62,11 +60,11 @@ class ArticleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        st_qs = SousTypeArticle.objects.filter(actif=True).order_by('type_article_id', 'ordre', 'libelle')
+        st_qs = SousTypeArticle.objects.select_related('type').order_by('type__libelle', 'libelle')
         self.fields['sous_type_article_id'] = forms.ChoiceField(
             label='Sous-type',
             choices=[('', '— Choisir un sous-type —')]
-            + [(str(st.id), f'{st.libelle} (type #{st.type_article_id})') for st in st_qs],
+            + [(str(st.id), f'{st.libelle} ({st.type.libelle})') for st in st_qs],
             required=True,
             widget=forms.Select(attrs={'class': 'art-input'}),
         )
@@ -88,7 +86,7 @@ class ArticleForm(forms.ModelForm):
         if not v:
             raise forms.ValidationError('Choisissez un sous-type.')
         pk = int(v)
-        if not SousTypeArticle.objects.filter(pk=pk, actif=True).exists():
+        if not SousTypeArticle.objects.filter(pk=pk).exists():
             raise forms.ValidationError('Sous-type invalide.')
         return pk
 

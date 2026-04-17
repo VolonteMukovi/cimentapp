@@ -10,13 +10,11 @@ from django.db import models
 class TypeArticle(models.Model):
     """Paramétrage système — type d’article (référencé par id numérique ailleurs)."""
 
-    code = models.CharField(max_length=64, unique=True)
     libelle = models.CharField(max_length=255)
-    ordre = models.PositiveIntegerField(default=0)
-    actif = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True)
 
     class Meta:
-        ordering = ['ordre', 'libelle']
+        ordering = ['libelle']
         verbose_name = 'type d’article'
         verbose_name_plural = 'types d’article'
 
@@ -25,27 +23,19 @@ class TypeArticle(models.Model):
 
 
 class SousTypeArticle(models.Model):
-    """Paramétrage système — sous-type rattaché à un type_article_id (int, sans FK)."""
+    """Paramétrage système — sous-type rattaché à un type (FK)."""
 
-    type_article_id = models.PositiveIntegerField(db_index=True)
-    code = models.CharField(max_length=64)
+    type = models.ForeignKey(TypeArticle, on_delete=models.CASCADE, related_name='sous_types')
     libelle = models.CharField(max_length=255)
-    ordre = models.PositiveIntegerField(default=0)
-    actif = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True)
 
     class Meta:
-        ordering = ['type_article_id', 'ordre', 'libelle']
+        ordering = ['type_id', 'libelle']
         verbose_name = 'sous-type d’article'
         verbose_name_plural = 'sous-types d’article'
-        constraints = [
-            models.UniqueConstraint(
-                fields=('type_article_id', 'code'),
-                name='articles_uniq_soustype_type',
-            ),
-        ]
 
     def __str__(self) -> str:
-        return f'{self.libelle} (#{self.type_article_id})'
+        return f'{self.libelle} (#{self.type_id})'
 
 
 class Unite(models.Model):

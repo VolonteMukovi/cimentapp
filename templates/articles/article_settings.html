@@ -2,6 +2,79 @@
 {% block title %}Paramètres articles — CimentApp{% endblock %}
 {% block content %}
 <section class="app-surface-card p-5 sm:p-6">
+  <style>
+    /* Inputs : bordure visible même sans focus (ergonomie) */
+    .art-input {
+      margin-top: 0.25rem;
+      display: block;
+      width: 100%;
+      border-radius: 1rem;
+      border: 1px solid rgb(203 213 225); /* slate-300 */
+      background: #fff;
+      padding: 0.65rem 1rem;
+      font-size: 0.875rem;
+      color: #0f172a;
+      box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    }
+    .art-input:focus {
+      outline: none;
+      border-color: #000;
+      box-shadow: 0 0 0 3px rgba(0,0,0,.08);
+    }
+    /* Actions dropdown (ellipsis) — shared for all tabs */
+    .art-actions {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .art-actions-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 9999px;
+      border: 1px solid rgb(226 232 240);
+      background: #fff;
+      color: rgb(51 65 85);
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .art-actions-btn:hover {
+      background: rgb(248 250 252);
+      border-color: rgb(203 213 225);
+      color: #000;
+    }
+    .art-actions-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.35rem);
+      min-width: 12.5rem;
+      border-radius: 1rem;
+      border: 1px solid rgb(226 232 240);
+      background: #fff;
+      box-shadow: 0 18px 40px rgba(15,23,42,.18);
+      overflow: hidden;
+      z-index: 9999;
+    }
+    .art-actions-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgb(30 41 59);
+      background: transparent;
+      border: 0;
+      text-align: left;
+      cursor: pointer;
+    }
+    .art-actions-item:hover { background: rgb(248 250 252); }
+    .art-actions-item.danger { color: rgb(185 28 28); }
+    .art-actions-item.danger:hover { background: rgb(254 242 242); }
+  </style>
   <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Paramètres</h1>
@@ -23,27 +96,8 @@
       <h2 class="text-base font-bold text-black">Unités</h2>
       <p class="mt-1 text-sm text-slate-600">Onglet par défaut. Ces unités apparaissent dans la création d’articles.</p>
     </div>
+    <button type="button" id="btn-open-unite-modal" class="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter une unité</button>
   </div>
-
-  <form method="post" action="{% url 'articles_unite_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-3">
-    {% csrf_token %}
-    <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.code.id_for_label }}">Code</label>
-      {{ form_unite.code }}
-      {% if form_unite.code.errors %}<p class="mt-1 text-sm font-medium text-red-600">{{ form_unite.code.errors|join:", " }}</p>{% endif %}
-    </div>
-    <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.libelle.id_for_label }}">Libellé</label>
-      {{ form_unite.libelle }}
-      {% if form_unite.libelle.errors %}<p class="mt-1 text-sm font-medium text-red-600">{{ form_unite.libelle.errors|join:", " }}</p>{% endif %}
-    </div>
-    <div class="flex items-end gap-3">
-      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
-        {{ form_unite.actif }} <span>Actif</span>
-      </label>
-      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
-    </div>
-  </form>
 
   <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
     <table class="w-full text-left text-sm">
@@ -52,6 +106,7 @@
           <th class="px-4 py-3">Code</th>
           <th class="px-4 py-3">Libellé</th>
           <th class="px-4 py-3">Actif</th>
+          <th class="px-4 py-3 text-right">Actions</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -60,128 +115,624 @@
           <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ u.code }}</td>
           <td class="px-4 py-3 font-semibold text-slate-900">{{ u.libelle }}</td>
           <td class="px-4 py-3">{% if u.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
+          <td class="px-4 py-3 text-right">
+            <div class="art-actions">
+              <button type="button" class="art-actions-btn btn-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Actions">
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.25a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5z"/></svg>
+              </button>
+              <div class="art-actions-menu hidden" role="menu" aria-label="Actions">
+                <button type="button" class="art-actions-item btn-edit-unite" role="menuitem"
+                  data-unite-id="{{ u.id }}"
+                  data-unite-code="{{ u.code|escapejs }}"
+                  data-unite-libelle="{{ u.libelle|escapejs }}"
+                  data-unite-actif="{% if u.actif %}1{% else %}0{% endif %}"
+                >
+                  <svg class="h-4 w-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1 0v14m-7 0h14"/></svg>
+                  <span>Modifier</span>
+                </button>
+                <form method="post" action="{% url 'articles_unite_delete' unite_id=u.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="art-actions-item danger" role="menuitem">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0l1 14h8l1-14"/></svg>
+                    <span>Supprimer</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="3" class="px-4 py-8 text-center text-slate-500">Aucune unité.</td></tr>
+        <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">Aucune unité.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
+
+<div id="modal-unite" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter une unité">
+  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <h3 id="modal-unite-title" class="text-lg font-bold text-black">Ajouter une unité</h3>
+      <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-modal-close" data-close="modal-unite" aria-label="Fermer">✕</button>
+    </div>
+    <form id="form-unite-modal" method="post" action="{% url 'articles_unite_create' %}" class="space-y-4 px-5 py-5">
+      {% csrf_token %}
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.code.id_for_label }}">Code</label>
+        {{ form_unite.code }}
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.libelle.id_for_label }}">Libellé</label>
+        {{ form_unite.libelle }}
+      </div>
+      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {{ form_unite.actif }} <span>Actif</span>
+      </label>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-unite">Annuler</button>
+        <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  function openModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('hidden');
+    el.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  document.querySelectorAll('.art-modal-close').forEach(function (b) {
+    b.addEventListener('click', function () { closeModal(b.getAttribute('data-close')); });
+  });
+  ['modal-unite'].forEach(function (mid) {
+    var root = document.getElementById(mid);
+    if (!root) return;
+    root.addEventListener('click', function (e) {
+      if (e.target === root) closeModal(mid);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeModal('modal-unite');
+  });
+
+  var btnAdd = document.getElementById('btn-open-unite-modal');
+  if (btnAdd) btnAdd.addEventListener('click', function () {
+    var f = document.getElementById('form-unite-modal');
+    if (f) f.setAttribute('action', '{% url "articles_unite_create" %}');
+    var title = document.getElementById('modal-unite-title');
+    if (title) title.textContent = 'Ajouter une unité';
+    openModal('modal-unite');
+  });
+
+  document.querySelectorAll('.btn-edit-unite').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = document.getElementById('form-unite-modal');
+      if (f) f.setAttribute('action', '{% url "articles_unite_update" unite_id=0 %}'.replace('/0/', '/' + b.getAttribute('data-unite-id') + '/'));
+      var title = document.getElementById('modal-unite-title');
+      if (title) title.textContent = 'Modifier une unité';
+      var code = document.getElementById('{{ form_unite.code.id_for_label }}');
+      if (code) code.value = b.getAttribute('data-unite-code') || '';
+      var lib = document.getElementById('{{ form_unite.libelle.id_for_label }}');
+      if (lib) lib.value = b.getAttribute('data-unite-libelle') || '';
+      var actif = document.getElementById('{{ form_unite.actif.id_for_label }}');
+      if (actif) actif.checked = (b.getAttribute('data-unite-actif') === '1');
+      openModal('modal-unite');
+    });
+  });
+})();
+</script>
 {% endif %}
 
 {% if active_tab == 'types' %}
 <section class="app-surface-card mt-4 p-5 sm:p-6">
-  <h2 class="text-base font-bold text-black">Types</h2>
-  <p class="mt-1 text-sm text-slate-600">Les sous-types utilisent <span class="font-mono text-xs">type_article_id</span> (id numérique du type).</p>
-
-  <form method="post" action="{% url 'articles_type_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-4">
-    {% csrf_token %}
+  <style>
+    @media (prefers-reduced-motion: no-preference) {
+      .art-acc-panel {
+        overflow: hidden;
+        transition: max-height 240ms ease;
+        max-height: 0;
+      }
+      .art-acc-panel.is-open {
+        max-height: 900px;
+      }
+    }
+    .art-actions {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .art-actions-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 9999px;
+      border: 1px solid rgb(226 232 240);
+      background: #fff;
+      color: rgb(51 65 85);
+      transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+    }
+    .art-actions-btn:hover {
+      background: rgb(248 250 252);
+      border-color: rgb(203 213 225);
+      color: #000;
+    }
+    .art-actions-menu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.35rem);
+      min-width: 12.5rem;
+      border-radius: 1rem;
+      border: 1px solid rgb(226 232 240);
+      background: #fff;
+      box-shadow: 0 18px 40px rgba(15,23,42,.18);
+      overflow: hidden;
+      z-index: 9999;
+    }
+    .art-actions-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: rgb(30 41 59);
+      background: transparent;
+      border: 0;
+      text-align: left;
+      cursor: pointer;
+    }
+    .art-actions-item:hover { background: rgb(248 250 252); }
+    .art-actions-item.danger { color: rgb(185 28 28); }
+    .art-actions-item.danger:hover { background: rgb(254 242 242); }
+  </style>
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
     <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.code.id_for_label }}">Code</label>
-      {{ form_type.code }}
+      <h2 class="text-base font-bold text-black">Types &amp; sous-types</h2>
+      <p class="mt-1 text-sm text-slate-600">Cliquez sur un type pour afficher ses sous-types. Ajoutez / modifiez via les modals.</p>
     </div>
-    <div class="sm:col-span-2">
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.libelle.id_for_label }}">Libellé</label>
-      {{ form_type.libelle }}
+    <div class="flex flex-wrap gap-2">
+      <button type="button" id="btn-open-type-modal" class="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter un type</button>
+      <button type="button" id="btn-open-soustype-modal" class="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Ajouter un sous-type</button>
     </div>
-    <div class="flex items-end gap-3">
-      <div class="w-24">
-        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.ordre.id_for_label }}">Ordre</label>
-        {{ form_type.ordre }}
+  </div>
+
+  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+    <div class="divide-y divide-slate-100">
+      {% for t in types %}
+      <div class="group">
+        <button type="button" class="w-full px-4 py-4 text-left transition hover:bg-slate-50 art-acc-trigger" data-type-id="{{ t.id }}">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="truncate font-semibold text-slate-900">{{ t.libelle }}</p>
+              <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+                <span class="font-mono text-[11px] text-slate-600">#{{ t.id }}</span>
+                {% if t.description %}<span class="truncate text-[11px] text-slate-500">{{ t.description }}</span>{% endif %}
+              </p>
+            </div>
+            <span class="mt-1 shrink-0 rounded-full border border-slate-200 bg-white p-2 text-slate-700 transition group-hover:border-slate-300">
+              <svg class="h-4 w-4 transition-transform duration-200 art-acc-chevron" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </span>
+          </div>
+        </button>
+
+        <div class="px-4 pb-3">
+          <div class="flex flex-wrap justify-end gap-2">
+            <button type="button" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 btn-add-soustype-for-type"
+              data-type-id="{{ t.id }}"
+            >Ajouter sous-type</button>
+            <div class="art-actions">
+              <button type="button" class="art-actions-btn btn-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Actions">
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.25a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5z"/></svg>
+              </button>
+              <div class="art-actions-menu hidden" role="menu" aria-label="Actions">
+                <button type="button" class="art-actions-item btn-edit-type" role="menuitem"
+                  data-type-id="{{ t.id }}"
+                  data-type-libelle="{{ t.libelle|escapejs }}"
+                  data-type-description="{{ t.description|default:''|escapejs }}"
+                >
+                  <svg class="h-4 w-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1 0v14m-7 0h14"/></svg>
+                  <span>Modifier</span>
+                </button>
+                <form method="post" action="{% url 'articles_type_delete' type_id=t.id %}">
+                  {% csrf_token %}
+                  <button type="submit" class="art-actions-item danger" role="menuitem">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0l1 14h8l1-14"/></svg>
+                    <span>Supprimer</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="art-acc-panel hidden px-4 pb-4" data-type-panel="{{ t.id }}">
+          <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sous-types</p>
+            <div class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
+              <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th class="px-3 py-2">Libellé</th>
+                    <th class="px-3 py-2">Description</th>
+                    <th class="px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  {% with tid=t.id %}
+                  {% for st in sous_types %}
+                    {% if st.type_id == tid %}
+                    <tr>
+                      <td class="px-3 py-2 font-semibold text-slate-900">{{ st.libelle }}</td>
+                      <td class="px-3 py-2 text-slate-600">{{ st.description|default:"—"|truncatechars:80 }}</td>
+                      <td class="px-3 py-2 text-right">
+                        <div class="art-actions">
+                          <button type="button" class="art-actions-btn btn-actions" aria-haspopup="menu" aria-expanded="false" aria-label="Actions">
+                            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7.25a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5zm0 6.5a1.75 1.75 0 110-3.5 1.75 1.75 0 010 3.5z"/></svg>
+                          </button>
+                          <div class="art-actions-menu hidden" role="menu" aria-label="Actions">
+                            <button type="button" class="art-actions-item btn-edit-soustype" role="menuitem"
+                              data-soustype-id="{{ st.id }}"
+                              data-soustype-type-id="{{ st.type_id }}"
+                              data-soustype-libelle="{{ st.libelle|escapejs }}"
+                              data-soustype-description="{{ st.description|default:''|escapejs }}"
+                            >
+                              <svg class="h-4 w-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5h2m-1 0v14m-7 0h14"/></svg>
+                              <span>Modifier</span>
+                            </button>
+                            <form method="post" action="{% url 'articles_soustype_delete' soustype_id=st.id %}">
+                              {% csrf_token %}
+                              <button type="submit" class="art-actions-item danger" role="menuitem">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 7h12M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m-9 0l1 14h8l1-14"/></svg>
+                                <span>Supprimer</span>
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    {% endif %}
+                  {% endfor %}
+                  {% endwith %}
+                </tbody>
+              </table>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">Astuce : “Ajouter un sous-type” pré-sélectionne le type si vous ouvrez depuis cet accordéon.</p>
+          </div>
+        </div>
       </div>
-      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
-        {{ form_type.actif }} <span>Actif</span>
-      </label>
-      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
+      {% empty %}
+      <div class="px-4 py-10 text-center">
+        <p class="text-sm font-medium text-slate-600">Aucun type.</p>
+        <p class="mt-2 text-xs text-slate-500">Ajoutez un type pour commencer.</p>
+      </div>
+      {% endfor %}
     </div>
-  </form>
-
-  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <tr>
-          <th class="px-4 py-3">ID</th>
-          <th class="px-4 py-3">Code</th>
-          <th class="px-4 py-3">Libellé</th>
-          <th class="px-4 py-3">Ordre</th>
-          <th class="px-4 py-3">Actif</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for t in types %}
-        <tr>
-          <td class="px-4 py-3 font-mono text-xs text-slate-600">{{ t.id }}</td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ t.code }}</td>
-          <td class="px-4 py-3 font-semibold text-slate-900">{{ t.libelle }}</td>
-          <td class="px-4 py-3 text-slate-700">{{ t.ordre }}</td>
-          <td class="px-4 py-3">{% if t.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Aucun type.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
   </div>
 </section>
 
-<section class="app-surface-card mt-4 p-5 sm:p-6">
-  <h2 class="text-base font-bold text-black">Sous-types</h2>
-  <p class="mt-1 text-sm text-slate-600">Créer un sous-type en indiquant l’ID du type. (Ex. <span class="font-mono text-xs">type_article_id=3</span>)</p>
-
-  <form method="post" action="{% url 'articles_soustype_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-6">
-    {% csrf_token %}
-    <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.type_article_id.id_for_label }}">Type ID</label>
-      {{ form_sous_type.type_article_id }}
+<div id="modal-type" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter un type">
+  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <h3 class="text-lg font-bold text-black">Ajouter un type</h3>
+      <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-modal-close" data-close="modal-type" aria-label="Fermer">✕</button>
     </div>
-    <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.code.id_for_label }}">Code</label>
-      {{ form_sous_type.code }}
-    </div>
-    <div class="sm:col-span-2">
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.libelle.id_for_label }}">Libellé</label>
-      {{ form_sous_type.libelle }}
-    </div>
-    <div>
-      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.ordre.id_for_label }}">Ordre</label>
-      {{ form_sous_type.ordre }}
-    </div>
-    <div class="flex items-end gap-3">
-      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
-        {{ form_sous_type.actif }} <span>Actif</span>
-      </label>
-      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
-    </div>
-  </form>
-
-  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        <tr>
-          <th class="px-4 py-3">Type ID</th>
-          <th class="px-4 py-3">Code</th>
-          <th class="px-4 py-3">Libellé</th>
-          <th class="px-4 py-3">Ordre</th>
-          <th class="px-4 py-3">Actif</th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for st in sous_types %}
-        <tr>
-          <td class="px-4 py-3 font-mono text-xs text-slate-600">{{ st.type_article_id }}</td>
-          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ st.code }}</td>
-          <td class="px-4 py-3 font-semibold text-slate-900">{{ st.libelle }}</td>
-          <td class="px-4 py-3 text-slate-700">{{ st.ordre }}</td>
-          <td class="px-4 py-3">{% if st.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Aucun sous-type.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <form id="form-type-modal" method="post" action="{% url 'articles_type_create' %}" class="space-y-4 px-5 py-5">
+      {% csrf_token %}
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.libelle.id_for_label }}">Libellé</label>
+        {{ form_type.libelle }}
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.description.id_for_label }}">Description</label>
+        {{ form_type.description }}
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-type">Annuler</button>
+        <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
+      </div>
+    </form>
   </div>
-</section>
+</div>
+
+<div id="modal-soustype" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter un sous-type">
+  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+      <h3 class="text-lg font-bold text-black">Ajouter un sous-type</h3>
+      <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-modal-close" data-close="modal-soustype" aria-label="Fermer">✕</button>
+    </div>
+    <form id="form-soustype-modal" method="post" action="{% url 'articles_soustype_create' %}" class="space-y-4 px-5 py-5">
+      {% csrf_token %}
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.type.id_for_label }}">Type</label>
+        {{ form_sous_type.type }}
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.libelle.id_for_label }}">Libellé</label>
+        {{ form_sous_type.libelle }}
+      </div>
+      <div>
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.description.id_for_label }}">Description</label>
+        {{ form_sous_type.description }}
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-soustype">Annuler</button>
+        <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+(function () {
+  function openModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden');
+    el.classList.add('flex');
+    document.body.classList.add('overflow-hidden');
+  }
+  function closeModal(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('hidden');
+    el.classList.remove('flex');
+    document.body.classList.remove('overflow-hidden');
+  }
+
+  var btnType = document.getElementById('btn-open-type-modal');
+  if (btnType) btnType.addEventListener('click', function () {
+    var f = document.getElementById('form-type-modal');
+    if (f) f.setAttribute('action', '{% url "articles_type_create" %}');
+    openModal('modal-type');
+  });
+  var btnST = document.getElementById('btn-open-soustype-modal');
+  if (btnST) btnST.addEventListener('click', function () {
+    var f2 = document.getElementById('form-soustype-modal');
+    if (f2) f2.setAttribute('action', '{% url "articles_soustype_create" %}');
+    openModal('modal-soustype');
+  });
+
+  document.querySelectorAll('.art-modal-close').forEach(function (b) {
+    b.addEventListener('click', function () { closeModal(b.getAttribute('data-close')); });
+  });
+  ['modal-type', 'modal-soustype'].forEach(function (mid) {
+    var root = document.getElementById(mid);
+    if (!root) return;
+    root.addEventListener('click', function (e) {
+      if (e.target === root) closeModal(mid);
+    });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeModal('modal-type');
+      closeModal('modal-soustype');
+    }
+  });
+
+  document.querySelectorAll('.art-acc-trigger').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tid = btn.getAttribute('data-type-id');
+      if (!tid) return;
+      var panel = document.querySelector('[data-type-panel=\"' + tid + '\"]');
+      if (!panel) return;
+      var chev = btn.querySelector('.art-acc-chevron');
+      var isOpen = !panel.classList.contains('hidden');
+      if (isOpen) {
+        panel.classList.add('hidden');
+        panel.classList.remove('is-open');
+        if (chev) chev.style.transform = 'rotate(0deg)';
+      } else {
+        panel.classList.remove('hidden');
+        // animation: max-height (si supportée)
+        panel.classList.add('is-open');
+        if (chev) chev.style.transform = 'rotate(180deg)';
+      }
+    });
+  });
+
+  // Edit sous-type (modal pré-rempli)
+  document.querySelectorAll('.btn-edit-soustype').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = document.getElementById('form-soustype-modal');
+      if (f) f.setAttribute('action', '{% url "articles_soustype_update" soustype_id=0 %}'.replace('/0/', '/' + b.getAttribute('data-soustype-id') + '/'));
+      var sel = document.getElementById('{{ form_sous_type.type.id_for_label }}');
+      if (sel) sel.value = b.getAttribute('data-soustype-type-id') || '';
+      var lib = document.getElementById('{{ form_sous_type.libelle.id_for_label }}');
+      if (lib) lib.value = b.getAttribute('data-soustype-libelle') || '';
+      var dsc = document.getElementById('{{ form_sous_type.description.id_for_label }}');
+      if (dsc) dsc.value = b.getAttribute('data-soustype-description') || '';
+      openModal('modal-soustype');
+    });
+  });
+
+  // Edit type (modal pré-rempli)
+  document.querySelectorAll('.btn-edit-type').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = document.getElementById('form-type-modal');
+      if (f) f.setAttribute('action', '{% url "articles_type_update" type_id=0 %}'.replace('/0/', '/' + b.getAttribute('data-type-id') + '/'));
+      var lib = document.getElementById('{{ form_type.libelle.id_for_label }}');
+      if (lib) lib.value = b.getAttribute('data-type-libelle') || '';
+      var dsc = document.getElementById('{{ form_type.description.id_for_label }}');
+      if (dsc) dsc.value = b.getAttribute('data-type-description') || '';
+      openModal('modal-type');
+    });
+  });
+
+  // Dropdown actions (ellipsis)
+  // Marqueur global : évite double initialisation avec le script global en bas.
+  if (!window.__artActionsDropdownInit) window.__artActionsDropdownInit = true;
+  var _activeActions = null; // { btn, wrap, menu, placeholder }
+  function closeAllActionMenus() {
+    if (_activeActions && _activeActions.menu) {
+      var menu = _activeActions.menu;
+      menu.classList.add('hidden');
+      menu.style.position = '';
+      menu.style.top = '';
+      menu.style.left = '';
+      menu.style.right = '';
+      menu.style.zIndex = '';
+      // remettre le menu à sa place pour conserver les forms/csrf
+      if (_activeActions.placeholder && _activeActions.placeholder.parentNode) {
+        _activeActions.placeholder.parentNode.replaceChild(menu, _activeActions.placeholder);
+      }
+    }
+    _activeActions = null;
+    document.querySelectorAll('.btn-actions').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+
+  function openActionsMenu(btn) {
+    if (!btn) return;
+    var wrap = btn.parentNode;
+    if (!wrap) return;
+    var menu = wrap.querySelector('.art-actions-menu');
+    if (!menu) return;
+
+    // "Portal": déplacer temporairement le menu sous <body> en position fixed pour éviter le clipping.
+    var rect = btn.getBoundingClientRect();
+    var placeholder = document.createElement('span');
+    placeholder.style.display = 'none';
+    wrap.replaceChild(placeholder, menu);
+    document.body.appendChild(menu);
+
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '99999';
+    // aligner à droite du bouton ; si déborde, on clamp
+    var left = rect.right - menu.offsetWidth;
+    var top = rect.top - 8; // petit offset, ensuite on met au-dessus
+    // placer au-dessus du bouton
+    top = rect.top - menu.offsetHeight - 8;
+    // fallback si pas assez de place en haut : en dessous
+    if (top < 8) top = rect.bottom + 8;
+    // clamp horizontale
+    if (left < 8) left = 8;
+    if (left + menu.offsetWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - menu.offsetWidth);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    menu.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    _activeActions = { btn: btn, wrap: wrap, menu: menu, placeholder: placeholder };
+  }
+
+  document.querySelectorAll('.btn-actions').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var isSame = _activeActions && _activeActions.btn === b;
+      closeAllActionMenus();
+      if (!isSame) openActionsMenu(b);
+    });
+  });
+  document.addEventListener('click', function () { closeAllActionMenus(); });
+  window.addEventListener('scroll', function () { closeAllActionMenus(); }, true);
+  window.addEventListener('resize', function () { closeAllActionMenus(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeAllActionMenus();
+  });
+
+  // Add sous-type for a given type (pré-sélection)
+  document.querySelectorAll('.btn-add-soustype-for-type').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f2 = document.getElementById('form-soustype-modal');
+      if (f2) f2.setAttribute('action', '{% url "articles_soustype_create" %}');
+      var sel = document.getElementById('{{ form_sous_type.type.id_for_label }}');
+      if (sel) sel.value = b.getAttribute('data-type-id') || '';
+      var lib = document.getElementById('{{ form_sous_type.libelle.id_for_label }}');
+      if (lib) lib.value = '';
+      var dsc = document.getElementById('{{ form_sous_type.description.id_for_label }}');
+      if (dsc) dsc.value = '';
+      openModal('modal-soustype');
+    });
+  });
+})();
+</script>
 {% endif %}
+
+<script>
+(function () {
+  // Dropdown actions (ellipsis) — init global (Unites + Types/Sous-types)
+  if (window.__artActionsDropdownInit) return;
+  window.__artActionsDropdownInit = true;
+
+  var _active = null; // { btn, wrap, menu, placeholder }
+  function closeAll() {
+    if (_active && _active.menu) {
+      var menu = _active.menu;
+      menu.classList.add('hidden');
+      menu.style.position = '';
+      menu.style.top = '';
+      menu.style.left = '';
+      menu.style.right = '';
+      menu.style.zIndex = '';
+      if (_active.placeholder && _active.placeholder.parentNode) {
+        _active.placeholder.parentNode.replaceChild(menu, _active.placeholder);
+      }
+    }
+    _active = null;
+    document.querySelectorAll('.btn-actions').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+
+  function openMenu(btn) {
+    var wrap = btn.parentNode;
+    if (!wrap) return;
+    var menu = wrap.querySelector('.art-actions-menu');
+    if (!menu) return;
+    var rect = btn.getBoundingClientRect();
+    var placeholder = document.createElement('span');
+    placeholder.style.display = 'none';
+    wrap.replaceChild(placeholder, menu);
+    document.body.appendChild(menu);
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '99999';
+    var left = rect.right - menu.offsetWidth;
+    var top = rect.top - menu.offsetHeight - 8;
+    if (top < 8) top = rect.bottom + 8;
+    if (left < 8) left = 8;
+    if (left + menu.offsetWidth > window.innerWidth - 8) left = Math.max(8, window.innerWidth - 8 - menu.offsetWidth);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    _active = { btn: btn, wrap: wrap, menu: menu, placeholder: placeholder };
+  }
+
+  function bind() {
+    document.querySelectorAll('.btn-actions').forEach(function (b) {
+      if (b.__artBound) return;
+      b.__artBound = true;
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var same = _active && _active.btn === b;
+        closeAll();
+        if (!same) openMenu(b);
+      });
+    });
+  }
+
+  bind();
+  document.addEventListener('click', function () { closeAll(); });
+  window.addEventListener('scroll', function () { closeAll(); }, true);
+  window.addEventListener('resize', function () { closeAll(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
+})();
+</script>
+
 {% endblock %}
 

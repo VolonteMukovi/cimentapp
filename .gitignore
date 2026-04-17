@@ -19,12 +19,12 @@ local_settings.py
 db.sqlite3
 media/
 staticfiles/
-
+db.sqlite3
 # Tests / coverage
 .pytest_cache/
 .coverage
 htmlcov/
-
+./db.sqlite3
 # IDE
 .vscode/
 .idea/

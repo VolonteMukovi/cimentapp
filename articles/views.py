@@ -127,7 +127,7 @@ class ArticleListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, ListView):
             del qcopy['page']
         qs = qcopy.urlencode()
         ctx['pagination_prefix'] = ('?' + qs + '&') if qs else '?'
-        ctx['sous_types'] = SousTypeArticle.objects.filter(actif=True).order_by('type_article_id', 'libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.select_related('type').all().order_by('type__libelle', 'libelle')
         ctx['unites'] = Unite.objects.filter(actif=True).order_by('libelle')
         ctx['total_filtered'] = self.get_base_queryset().count()
         page_items = list(ctx.get('articles') or [])
@@ -291,8 +291,8 @@ class ArticleSettingsView(ArticleStoreAccessMixin, TemplateView):
         ctx['active_tab'] = tab
 
         ctx['unites'] = Unite.objects.all().order_by('libelle')
-        ctx['types'] = TypeArticle.objects.all().order_by('ordre', 'libelle')
-        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'ordre', 'libelle')
+        ctx['types'] = TypeArticle.objects.all().order_by('libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.select_related('type').all().order_by('type__libelle', 'libelle')
 
         ctx['form_unite'] = UniteForm(prefix='unite')
         ctx['form_type'] = TypeArticleForm(prefix='type')
@@ -318,6 +318,46 @@ class UniteCreateView(ArticleStoreAccessMixin, FormView):
         for field, errs in form.errors.items():
             for err in errs:
                 messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=unites')
+
+
+class UniteUpdateView(ArticleStoreAccessMixin, FormView):
+    form_class = UniteForm
+    http_method_names = ['post']
+
+    def dispatch(self, request, *args, **kwargs):
+        self.obj = Unite.objects.filter(pk=kwargs['unite_id']).first()
+        if not self.obj:
+            raise Http404('Unité introuvable.')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'unite_edit'
+        kwargs['instance'] = self.obj
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Unité mise à jour.')
+        return redirect(reverse('store_articles_settings') + '?tab=unites')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=unites')
+
+
+class UniteDeleteView(ArticleStoreAccessMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, unite_id):
+        obj = Unite.objects.filter(pk=unite_id).first()
+        if not obj:
+            raise Http404('Unité introuvable.')
+        obj.delete()
+        messages.success(request, 'Unité supprimée.')
         return redirect(reverse('store_articles_settings') + '?tab=unites')
 
 
@@ -360,4 +400,84 @@ class SousTypeArticleCreateView(ArticleStoreAccessMixin, FormView):
         for field, errs in form.errors.items():
             for err in errs:
                 messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+
+class TypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
+    form_class = TypeArticleForm
+    http_method_names = ['post']
+
+    def dispatch(self, request, *args, **kwargs):
+        self.obj = TypeArticle.objects.filter(pk=kwargs['type_id']).first()
+        if not self.obj:
+            raise Http404('Type introuvable.')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'type_edit'
+        kwargs['instance'] = self.obj
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Type mis à jour.')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+
+class TypeArticleDeleteView(ArticleStoreAccessMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, type_id):
+        obj = TypeArticle.objects.filter(pk=type_id).first()
+        if not obj:
+            raise Http404('Type introuvable.')
+        obj.delete()
+        messages.success(request, 'Type supprimé.')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+
+class SousTypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
+    form_class = SousTypeArticleForm
+    http_method_names = ['post']
+
+    def dispatch(self, request, *args, **kwargs):
+        self.obj = SousTypeArticle.objects.filter(pk=kwargs['soustype_id']).first()
+        if not self.obj:
+            raise Http404('Sous-type introuvable.')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'soustype_edit'
+        kwargs['instance'] = self.obj
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Sous-type mis à jour.')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+
+class SousTypeArticleDeleteView(ArticleStoreAccessMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, soustype_id):
+        obj = SousTypeArticle.objects.filter(pk=soustype_id).first()
+        if not obj:
+            raise Http404('Sous-type introuvable.')
+        obj.delete()
+        messages.success(request, 'Sous-type supprimé.')
         return redirect(reverse('store_articles_settings') + '?tab=types')

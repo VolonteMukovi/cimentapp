@@ -5,16 +5,15 @@ from articles.models import Article, SousTypeArticle, TypeArticle, Unite
 
 @admin.register(TypeArticle)
 class TypeArticleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'code', 'libelle', 'ordre', 'actif')
-    list_filter = ('actif',)
-    search_fields = ('code', 'libelle')
+    list_display = ('id', 'libelle')
+    search_fields = ('libelle', 'description')
 
 
 @admin.register(SousTypeArticle)
 class SousTypeArticleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'type_article_id', 'code', 'libelle', 'ordre', 'actif')
-    list_filter = ('actif', 'type_article_id')
-    search_fields = ('code', 'libelle')
+    list_display = ('id', 'type', 'libelle')
+    list_filter = ('type',)
+    search_fields = ('libelle', 'description')
 
 
 @admin.register(Unite)

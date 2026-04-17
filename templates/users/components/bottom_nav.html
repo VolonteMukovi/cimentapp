@@ -1,10 +1,10 @@
 {% with name=request.resolver_match.url_name %}
 {% if staff_nav_items %}
 <nav class="app-bottom-nav-dock pointer-events-none fixed inset-x-0 bottom-0 flex justify-center px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2" aria-label="Navigation principale">
-  <div class="pointer-events-auto flex w-full max-w-lg items-stretch rounded-[1.35rem] bg-black py-2 pl-2 pr-1 shadow-2xl shadow-black/35 ring-1 ring-white/10 sm:pl-3">
-    <div class="flex min-w-0 flex-1 gap-0.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-1 [&::-webkit-scrollbar]:hidden">
+  <div class="pointer-events-auto relative flex w-full max-w-lg items-stretch rounded-[1.35rem] bg-black py-2 pl-2 pr-1 shadow-2xl shadow-black/35 ring-1 ring-white/10 sm:pl-3">
+    <div id="staff-nav-row" class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-hidden sm:gap-1">
       {% for item in staff_nav_items %}
-      <a href="{% url item.url_name %}" class="flex min-w-[3.25rem] max-w-[5.5rem] flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1.5 text-center transition sm:min-w-[3.5rem] sm:px-2 {% if name in item.match %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" {% if name in item.match %}aria-current="page"{% endif %} title="{{ item.label }}">
+      <a data-staff-nav-item href="{% url item.url_name %}" class="flex min-w-[3.25rem] max-w-[5.5rem] flex-shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1.5 text-center transition sm:min-w-[3.5rem] sm:px-2 {% if name in item.match %}bg-white shadow-md{% else %}hover:bg-white/10{% endif %}" {% if name in item.match %}aria-current="page"{% endif %} title="{{ item.label }}">
         <svg class="h-5 w-5 shrink-0 sm:h-6 sm:w-6 {% if name in item.match %}text-black{% else %}text-white/65{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="{{ item.path_d }}"/>
         </svg>
@@ -12,7 +12,133 @@
       </a>
       {% endfor %}
     </div>
+    <div class="relative flex items-center pl-1">
+      <button type="button" id="staff-nav-more-btn" class="flex h-[2.55rem] w-[2.55rem] items-center justify-center rounded-xl text-white/80 transition hover:bg-white/10 hover:text-white" aria-haspopup="menu" aria-expanded="false" aria-label="Plus">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m7-7H5"/></svg>
+      </button>
+      <div id="staff-nav-more-menu" class="absolute bottom-[calc(100%+0.75rem)] right-0 hidden w-56 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl" role="menu" aria-label="Plus">
+        <div class="max-h-[60vh] overflow-auto py-1" id="staff-nav-more-menu-items"></div>
+      </div>
+    </div>
   </div>
 </nav>
+<script>
+(function () {
+  var row = document.getElementById('staff-nav-row');
+  var btn = document.getElementById('staff-nav-more-btn');
+  var menu = document.getElementById('staff-nav-more-menu');
+  var menuItems = document.getElementById('staff-nav-more-menu-items');
+  if (!row || !btn || !menu || !menuItems) return;
+
+  function closeMenu() {
+    menu.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+  }
+  function openMenu() {
+    menu.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+  }
+  function toggleMenu() {
+    if (menu.classList.contains('hidden')) openMenu();
+    else closeMenu();
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMenu();
+  });
+  document.addEventListener('click', function () { closeMenu(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeMenu();
+  });
+
+  function rebuildMenuFromHidden(hiddenLinks) {
+    menuItems.innerHTML = '';
+    hiddenLinks.forEach(function (a) {
+      var href = a.getAttribute('href');
+      var labelEl = a.querySelector('span');
+      var label = labelEl ? (labelEl.textContent || '').trim() : (a.getAttribute('title') || 'Menu');
+
+      var item = document.createElement('a');
+      item.href = href || '#';
+      item.setAttribute('role', 'menuitem');
+      item.className = 'flex items-center gap-3 px-4 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50';
+
+      var svg = a.querySelector('svg');
+      if (svg) {
+        var icon = svg.cloneNode(true);
+        icon.className = 'h-5 w-5 text-slate-700';
+        item.appendChild(icon);
+      } else {
+        var dot = document.createElement('span');
+        dot.className = 'h-2 w-2 rounded-full bg-slate-300';
+        item.appendChild(dot);
+      }
+
+      var text = document.createElement('span');
+      text.className = 'min-w-0 flex-1 truncate';
+      text.textContent = label;
+      item.appendChild(text);
+
+      if (a.getAttribute('aria-current') === 'page') {
+        var badge = document.createElement('span');
+        badge.className = 'shrink-0 rounded-full bg-black px-2 py-0.5 text-[11px] font-semibold text-white';
+        badge.textContent = 'Actif';
+        item.appendChild(badge);
+      }
+      menuItems.appendChild(item);
+    });
+  }
+
+  function layout() {
+    closeMenu();
+    var links = Array.prototype.slice.call(row.querySelectorAll('[data-staff-nav-item]'));
+    if (!links.length) return;
+    links.forEach(function (a) { a.classList.remove('hidden'); });
+
+    // Cache depuis la fin jusqu'à ce que tout rentre (en laissant toujours le bouton +).
+    var maxRight = row.getBoundingClientRect().right;
+    for (var i = links.length - 1; i >= 0; i--) {
+      var rect = links[i].getBoundingClientRect();
+      if (rect.right <= maxRight) continue;
+      links[i].classList.add('hidden');
+    }
+    // Si encore overflow (cas extrême), cache plus.
+    var guard = 30;
+    while (guard-- > 0) {
+      var last = null;
+      for (var j = links.length - 1; j >= 0; j--) {
+        if (!links[j].classList.contains('hidden')) { last = links[j]; break; }
+      }
+      if (!last) break;
+      if (last.getBoundingClientRect().right <= maxRight) break;
+      last.classList.add('hidden');
+    }
+
+    var hidden = links.filter(function (a) { return a.classList.contains('hidden'); });
+    if (hidden.length) {
+      btn.classList.remove('hidden');
+      rebuildMenuFromHidden(hidden);
+    } else {
+      btn.classList.add('hidden');
+      menuItems.innerHTML = '';
+      closeMenu();
+    }
+  }
+
+  var raf = null;
+  function schedule() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function () {
+      raf = null;
+      layout();
+    });
+  }
+
+  schedule();
+  window.addEventListener('resize', schedule);
+})();
+</script>
 {% endif %}
 {% endwith %}
