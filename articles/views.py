@@ -14,10 +14,10 @@ from django.http import Http404, JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.views import View
-from django.views.generic import FormView, ListView
+from django.views.generic import FormView, ListView, TemplateView
 
-from articles.forms import ArticleForm
-from articles.models import Article, SousTypeArticle, Unite
+from articles.forms import ArticleForm, SousTypeArticleForm, TypeArticleForm, UniteForm
+from articles.models import Article, SousTypeArticle, TypeArticle, Unite
 from articles.utils import build_images_from_post, delete_article_media
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
@@ -278,3 +278,86 @@ class ArticleJsonDetailView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View)
                 },
             },
         )
+
+
+class ArticleSettingsView(ArticleStoreAccessMixin, TemplateView):
+    template_name = 'articles/article_settings.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        tab = (self.request.GET.get('tab') or 'unites').strip().lower()
+        if tab not in ('unites', 'types'):
+            tab = 'unites'
+        ctx['active_tab'] = tab
+
+        ctx['unites'] = Unite.objects.all().order_by('libelle')
+        ctx['types'] = TypeArticle.objects.all().order_by('ordre', 'libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'ordre', 'libelle')
+
+        ctx['form_unite'] = UniteForm(prefix='unite')
+        ctx['form_type'] = TypeArticleForm(prefix='type')
+        ctx['form_sous_type'] = SousTypeArticleForm(prefix='sous_type')
+        return ctx
+
+
+class UniteCreateView(ArticleStoreAccessMixin, FormView):
+    form_class = UniteForm
+    http_method_names = ['post']
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'unite'
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Unité enregistrée.')
+        return redirect(reverse('store_articles_settings') + '?tab=unites')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=unites')
+
+
+class TypeArticleCreateView(ArticleStoreAccessMixin, FormView):
+    form_class = TypeArticleForm
+    http_method_names = ['post']
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'type'
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Type enregistré.')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+
+class SousTypeArticleCreateView(ArticleStoreAccessMixin, FormView):
+    form_class = SousTypeArticleForm
+    http_method_names = ['post']
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'sous_type'
+        return kwargs
+
+    def form_valid(self, form):
+        form.save()
+        messages.success(self.request, 'Sous-type enregistré.')
+        return redirect(reverse('store_articles_settings') + '?tab=types')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=types')

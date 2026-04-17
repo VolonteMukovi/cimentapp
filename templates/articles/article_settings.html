@@ -1,0 +1,187 @@
+{% extends "base_app.html" %}
+{% block title %}Paramètres articles — CimentApp{% endblock %}
+{% block content %}
+<section class="app-surface-card p-5 sm:p-6">
+  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Paramètres</h1>
+      <p class="mt-1 text-sm text-slate-600">Unités, types et sous-types utilisés par le catalogue.</p>
+    </div>
+    <a href="{% url 'store_articles' %}" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Retour articles</a>
+  </div>
+
+  <div class="mt-5 flex flex-wrap gap-2">
+    <a href="{% url 'store_articles_settings' %}?tab=unites" class="rounded-full px-4 py-2 text-sm font-semibold {% if active_tab == 'unites' %}bg-black text-white{% else %}border border-slate-200 bg-white text-slate-700 hover:bg-slate-50{% endif %}">Unité</a>
+    <a href="{% url 'store_articles_settings' %}?tab=types" class="rounded-full px-4 py-2 text-sm font-semibold {% if active_tab == 'types' %}bg-black text-white{% else %}border border-slate-200 bg-white text-slate-700 hover:bg-slate-50{% endif %}">Type &amp; sous-type</a>
+  </div>
+</section>
+
+{% if active_tab == 'unites' %}
+<section class="app-surface-card mt-4 p-5 sm:p-6">
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <h2 class="text-base font-bold text-black">Unités</h2>
+      <p class="mt-1 text-sm text-slate-600">Onglet par défaut. Ces unités apparaissent dans la création d’articles.</p>
+    </div>
+  </div>
+
+  <form method="post" action="{% url 'articles_unite_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-3">
+    {% csrf_token %}
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.code.id_for_label }}">Code</label>
+      {{ form_unite.code }}
+      {% if form_unite.code.errors %}<p class="mt-1 text-sm font-medium text-red-600">{{ form_unite.code.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_unite.libelle.id_for_label }}">Libellé</label>
+      {{ form_unite.libelle }}
+      {% if form_unite.libelle.errors %}<p class="mt-1 text-sm font-medium text-red-600">{{ form_unite.libelle.errors|join:", " }}</p>{% endif %}
+    </div>
+    <div class="flex items-end gap-3">
+      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {{ form_unite.actif }} <span>Actif</span>
+      </label>
+      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
+    </div>
+  </form>
+
+  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Code</th>
+          <th class="px-4 py-3">Libellé</th>
+          <th class="px-4 py-3">Actif</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for u in unites %}
+        <tr>
+          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ u.code }}</td>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ u.libelle }}</td>
+          <td class="px-4 py-3">{% if u.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="px-4 py-8 text-center text-slate-500">Aucune unité.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if active_tab == 'types' %}
+<section class="app-surface-card mt-4 p-5 sm:p-6">
+  <h2 class="text-base font-bold text-black">Types</h2>
+  <p class="mt-1 text-sm text-slate-600">Les sous-types utilisent <span class="font-mono text-xs">type_article_id</span> (id numérique du type).</p>
+
+  <form method="post" action="{% url 'articles_type_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-4">
+    {% csrf_token %}
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.code.id_for_label }}">Code</label>
+      {{ form_type.code }}
+    </div>
+    <div class="sm:col-span-2">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.libelle.id_for_label }}">Libellé</label>
+      {{ form_type.libelle }}
+    </div>
+    <div class="flex items-end gap-3">
+      <div class="w-24">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.ordre.id_for_label }}">Ordre</label>
+        {{ form_type.ordre }}
+      </div>
+      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {{ form_type.actif }} <span>Actif</span>
+      </label>
+      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
+    </div>
+  </form>
+
+  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">ID</th>
+          <th class="px-4 py-3">Code</th>
+          <th class="px-4 py-3">Libellé</th>
+          <th class="px-4 py-3">Ordre</th>
+          <th class="px-4 py-3">Actif</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in types %}
+        <tr>
+          <td class="px-4 py-3 font-mono text-xs text-slate-600">{{ t.id }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ t.code }}</td>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ t.libelle }}</td>
+          <td class="px-4 py-3 text-slate-700">{{ t.ordre }}</td>
+          <td class="px-4 py-3">{% if t.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Aucun type.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="app-surface-card mt-4 p-5 sm:p-6">
+  <h2 class="text-base font-bold text-black">Sous-types</h2>
+  <p class="mt-1 text-sm text-slate-600">Créer un sous-type en indiquant l’ID du type. (Ex. <span class="font-mono text-xs">type_article_id=3</span>)</p>
+
+  <form method="post" action="{% url 'articles_soustype_create' %}" class="mt-4 grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 p-4 sm:grid-cols-6">
+    {% csrf_token %}
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.type_article_id.id_for_label }}">Type ID</label>
+      {{ form_sous_type.type_article_id }}
+    </div>
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.code.id_for_label }}">Code</label>
+      {{ form_sous_type.code }}
+    </div>
+    <div class="sm:col-span-2">
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.libelle.id_for_label }}">Libellé</label>
+      {{ form_sous_type.libelle }}
+    </div>
+    <div>
+      <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.ordre.id_for_label }}">Ordre</label>
+      {{ form_sous_type.ordre }}
+    </div>
+    <div class="flex items-end gap-3">
+      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+        {{ form_sous_type.actif }} <span>Actif</span>
+      </label>
+      <button type="submit" class="ml-auto rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter</button>
+    </div>
+  </form>
+
+  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <tr>
+          <th class="px-4 py-3">Type ID</th>
+          <th class="px-4 py-3">Code</th>
+          <th class="px-4 py-3">Libellé</th>
+          <th class="px-4 py-3">Ordre</th>
+          <th class="px-4 py-3">Actif</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for st in sous_types %}
+        <tr>
+          <td class="px-4 py-3 font-mono text-xs text-slate-600">{{ st.type_article_id }}</td>
+          <td class="px-4 py-3 font-mono text-xs text-slate-700">{{ st.code }}</td>
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ st.libelle }}</td>
+          <td class="px-4 py-3 text-slate-700">{{ st.ordre }}</td>
+          <td class="px-4 py-3">{% if st.actif %}<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">Oui</span>{% else %}<span class="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Non</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">Aucun sous-type.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}
+

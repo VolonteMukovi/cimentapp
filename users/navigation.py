@@ -40,7 +40,13 @@ STAFF_NAV_ENTRIES: list[dict[str, Any]] = [
         'url_name': 'store_articles',
         'label': 'Articles',
         'icon': 'cube',
-        'match': ('store_articles', 'article_create', 'article_update', 'article_delete', 'article_api_detail'),
+        'match': (
+            'store_articles',
+            'article_create',
+            'article_update',
+            'article_delete',
+            'article_api_detail',
+        ),
         'roles': ALL_STAFF,
     },
     {
@@ -99,6 +105,19 @@ STAFF_NAV_ENTRIES: list[dict[str, Any]] = [
         'match': ('compte',),
         'roles': ALL_STAFF,
     },
+    {
+        'id': 'articles_settings',
+        'url_name': 'store_articles_settings',
+        'label': 'Paramètres',
+        'icon': 'clipboard',
+        'match': (
+            'store_articles_settings',
+            'articles_unite_create',
+            'articles_type_create',
+            'articles_soustype_create',
+        ),
+        'roles': ALL_STAFF,
+    },
 ]
 
 
@@ -116,11 +135,12 @@ def staff_nav_for_user(user) -> list[dict[str, Any]]:
 
 
 STORE_MODULE_KEYS = frozenset(
-    {'articles', 'lots', 'caisse', 'ventes', 'commandes', 'rapports'},
+    {'articles', 'articles_settings', 'lots', 'caisse', 'ventes', 'commandes', 'rapports'},
 )
 
 STORE_MODULE_LABELS = {
     'articles': 'Articles',
+    'articles_settings': 'Paramètres articles',
     'lots': 'Lots produits',
     'caisse': 'Caisse & sous-comptes',
     'ventes': 'Ventes',
@@ -129,7 +149,7 @@ STORE_MODULE_LABELS = {
 }
 
 # Agent : pas lots ni rapports (écriture / pilotage étendu)
-_AGENT_ALLOWED = frozenset({'articles', 'caisse', 'ventes', 'commandes'})
+_AGENT_ALLOWED = frozenset({'articles', 'articles_settings', 'caisse', 'ventes', 'commandes'})
 
 
 def can_access_store_module(user, module_key: str) -> bool:

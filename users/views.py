@@ -168,6 +168,20 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         else:
             ctx['dashboard_store_links'] = []
         eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        # KPI produits (articles) : compte réel en base, borné à l'entreprise active.
+        # Superadmin sans entreprise active : compte global (lecture).
+        try:
+            from articles.models import Article
+
+            if eid is not None:
+                ctx['kpi_produits_count'] = Article.objects.filter(entreprise_id=int(eid)).count()
+            elif user.is_authenticated and isinstance(user, User) and user.is_superadmin_role():
+                ctx['kpi_produits_count'] = Article.objects.count()
+            else:
+                ctx['kpi_produits_count'] = 0
+        except Exception:
+            ctx['kpi_produits_count'] = 0
+
         can_invite_client = (
             eid
             and user.is_authenticated

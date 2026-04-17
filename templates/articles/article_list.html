@@ -374,7 +374,7 @@
 
   {{ article_galleries_json|json_script:"article-galleries-data" }}
 
-  <div id="art-lightbox" class="art-lightbox fixed inset-0 z-[280] flex flex-col text-white" style="display:none" role="dialog" aria-modal="true" aria-labelledby="art-lightbox-title">
+  <div id="art-lightbox" class="art-lightbox fixed inset-0 flex flex-col text-white" style="display:none; z-index: 9999;" role="dialog" aria-modal="true" aria-labelledby="art-lightbox-title">
     <div id="art-lightbox-backdrop" class="absolute inset-0 bg-black/90" aria-hidden="true"></div>
     <div class="relative z-10 flex min-h-0 flex-1 flex-col">
       <div class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-3 sm:px-5">
@@ -744,6 +744,19 @@
 
   function openLightbox(aid, idx) {
     var slides = galleryData[aid] || [];
+    // Fallback si le JSON n'est pas disponible : reconstruire depuis le DOM.
+    if (!slides.length && root) {
+      var nodes = root.querySelectorAll('[data-lightbox-aid=\"' + aid + '\"] img');
+      var tmp = [];
+      for (var t = 0; t < nodes.length; t++) {
+        var im = nodes[t];
+        if (!im || !im.getAttribute) continue;
+        var src = im.getAttribute('src') || '';
+        if (!src) continue;
+        tmp.push({ src: src, alt: (im.getAttribute('alt') || ''), main: (im.className || '').indexOf('is-main-ring') !== -1 });
+      }
+      slides = tmp;
+    }
     if (!slides.length || !lightboxEl) return;
     var i = parseInt(idx, 10);
     if (isNaN(i)) i = 0;
@@ -766,7 +779,12 @@
 
   if (root) {
     root.addEventListener('click', function (e) {
-      var btn = e.target.closest('.art-thumb-btn');
+      var el = e.target;
+      var btn = null;
+      while (el && el !== root) {
+        if (el.classList && el.classList.contains('art-thumb-btn')) { btn = el; break; }
+        el = el.parentNode;
+      }
       if (!btn) return;
       var aid = btn.getAttribute('data-lightbox-aid');
       var idx = btn.getAttribute('data-lightbox-idx');

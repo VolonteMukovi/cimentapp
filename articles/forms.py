@@ -4,7 +4,40 @@ from __future__ import annotations
 
 from django import forms
 
-from articles.models import Article, SousTypeArticle, Unite
+from articles.models import Article, SousTypeArticle, TypeArticle, Unite
+
+
+class UniteForm(forms.ModelForm):
+    class Meta:
+        model = Unite
+        fields = ('code', 'libelle', 'actif')
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '32', 'autocomplete': 'off'}),
+            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '128', 'autocomplete': 'off'}),
+        }
+
+
+class TypeArticleForm(forms.ModelForm):
+    class Meta:
+        model = TypeArticle
+        fields = ('code', 'libelle', 'ordre', 'actif')
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '64', 'autocomplete': 'off'}),
+            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
+            'ordre': forms.NumberInput(attrs={'class': 'art-input', 'min': '0'}),
+        }
+
+
+class SousTypeArticleForm(forms.ModelForm):
+    class Meta:
+        model = SousTypeArticle
+        fields = ('type_article_id', 'code', 'libelle', 'ordre', 'actif')
+        widgets = {
+            'type_article_id': forms.NumberInput(attrs={'class': 'art-input', 'min': '1'}),
+            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '64', 'autocomplete': 'off'}),
+            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
+            'ordre': forms.NumberInput(attrs={'class': 'art-input', 'min': '0'}),
+        }
 
 
 class ArticleForm(forms.ModelForm):
