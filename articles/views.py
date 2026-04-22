@@ -127,7 +127,7 @@ class ArticleListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, ListView):
             del qcopy['page']
         qs = qcopy.urlencode()
         ctx['pagination_prefix'] = ('?' + qs + '&') if qs else '?'
-        ctx['sous_types'] = SousTypeArticle.objects.select_related('type').all().order_by('type__libelle', 'libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
         ctx['unites'] = Unite.objects.filter(actif=True).order_by('libelle')
         ctx['total_filtered'] = self.get_base_queryset().count()
         page_items = list(ctx.get('articles') or [])
@@ -292,12 +292,74 @@ class ArticleSettingsView(ArticleStoreAccessMixin, TemplateView):
 
         ctx['unites'] = Unite.objects.all().order_by('libelle')
         ctx['types'] = TypeArticle.objects.all().order_by('libelle')
-        ctx['sous_types'] = SousTypeArticle.objects.select_related('type').all().order_by('type__libelle', 'libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
 
         ctx['form_unite'] = UniteForm(prefix='unite')
         ctx['form_type'] = TypeArticleForm(prefix='type')
         ctx['form_sous_type'] = SousTypeArticleForm(prefix='sous_type')
         return ctx
+
+
+def _paginate(qs, request, *, default_page_size: int = 25):
+    try:
+        page = int(request.GET.get('page') or 1)
+    except Exception:
+        page = 1
+    if page < 1:
+        page = 1
+    try:
+        page_size = int(request.GET.get('page_size') or default_page_size)
+    except Exception:
+        page_size = default_page_size
+    if page_size < 1:
+        page_size = default_page_size
+    if page_size > 200:
+        page_size = 200
+
+    count = qs.count()
+    offset = (page - 1) * page_size
+    results = list(qs[offset : offset + page_size])
+    return results, count, page, page_size
+
+
+class ArticlesApiListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View):
+    """GET liste articles (paginée) pour selects/autocomplete UI."""
+
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        qs = self.scoped_articles().order_by('-date_creation', 'nom')
+        q = (request.GET.get('q') or '').strip()
+        if q:
+            qs = qs.filter(Q(nom__icontains=q) | Q(article_id__icontains=q))
+
+        rows, count, page, page_size = _paginate(qs, request)
+        mu = settings.MEDIA_URL
+        if not str(mu).endswith('/'):
+            mu = f'{mu}/'
+        results = []
+        for a in rows:
+            main_img = ''
+            if isinstance(a.images, list):
+                for im in a.images:
+                    if isinstance(im, dict) and im.get('image') and im.get('is_main'):
+                        main_img = f"{mu}{str(im['image']).lstrip('/')}"
+                        break
+                if not main_img:
+                    for im in a.images:
+                        if isinstance(im, dict) and im.get('image'):
+                            main_img = f"{mu}{str(im['image']).lstrip('/')}"
+                            break
+            results.append(
+                {
+                    'article_id': a.article_id,
+                    'nom': a.nom,
+                    'prix_catalogue': str(a.prix_catalogue),
+                    'image': main_img,
+                    'entreprise_id': a.entreprise_id,
+                }
+            )
+        return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
 
 
 class UniteCreateView(ArticleStoreAccessMixin, FormView):

@@ -23,19 +23,19 @@ class TypeArticle(models.Model):
 
 
 class SousTypeArticle(models.Model):
-    """Paramétrage système — sous-type rattaché à un type (FK)."""
+    """Paramétrage système — sous-type rattaché à un type_article_id (int, sans FK)."""
 
-    type = models.ForeignKey(TypeArticle, on_delete=models.CASCADE, related_name='sous_types')
+    type_article_id = models.PositiveIntegerField(db_index=True)
     libelle = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
 
     class Meta:
-        ordering = ['type_id', 'libelle']
+        ordering = ['type_article_id', 'libelle']
         verbose_name = 'sous-type d’article'
         verbose_name_plural = 'sous-types d’article'
 
     def __str__(self) -> str:
-        return f'{self.libelle} (#{self.type_id})'
+        return f'{self.libelle} (#{self.type_article_id})'
 
 
 class Unite(models.Model):
@@ -74,6 +74,13 @@ class Article(models.Model):
         blank=True,
         help_text='Liste d’objets {image, is_main} ; chemins relatifs sous MEDIA.',
         verbose_name='images',
+    )
+    prix_catalogue = models.DecimalField(
+        max_digits=18,
+        decimal_places=2,
+        default=0,
+        help_text='Prix normal (catalogue). Modifiable lors d’une vente.',
+        verbose_name='prix catalogue',
     )
     entreprise_id = models.PositiveIntegerField(db_index=True)
     date_creation = models.DateTimeField(auto_now_add=True)

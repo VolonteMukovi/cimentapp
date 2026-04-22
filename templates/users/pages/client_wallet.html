@@ -1,0 +1,64 @@
+{% extends "base_client_app.html" %}
+{% block title %}Solde & activité — Espace client{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <h1 class="text-2xl font-bold tracking-tight text-black">Solde & activité</h1>
+    <p class="mt-1 text-sm text-slate-600">Vue simple basée sur vos commandes/réservations sur l’entreprise active.</p>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="grid gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-black p-4 text-white">
+        <p class="text-xs font-semibold uppercase tracking-wide text-white/60">Total réservé</p>
+        <p id="wallet-total" class="mt-1 text-3xl font-bold tabular-nums">—</p>
+        <p id="wallet-meta" class="mt-1 text-xs text-white/60"></p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Évolution (par jour)</p>
+        <div class="mt-2">
+          <canvas id="wallet-chart" height="160" aria-label="Graphique activité"></canvas>
+        </div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var chart = null;
+  function run() {
+    fetch('/fr/client/commandes/api/stats/', { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        document.getElementById('wallet-total').textContent = (data.stats && data.stats.total) ? (data.stats.total + ' USD') : '0.00 USD';
+        document.getElementById('wallet-meta').textContent = (data.stats && data.stats.commandes != null) ? (data.stats.commandes + ' commandes') : '';
+        var labels = (data.results || []).map(function(r){ return r.day; });
+        var values = (data.results || []).map(function(r){ return parseFloat(r.total || '0') || 0; });
+        var canvas = document.getElementById('wallet-chart');
+        if (!canvas || !window.Chart) return;
+        if (chart) chart.destroy();
+        chart = new Chart(canvas.getContext('2d'), {
+          type: 'line',
+          data: { labels: labels, datasets: [{ label: 'Total réservé', data: values, borderColor: 'rgba(0,0,0,0.9)', backgroundColor: 'rgba(0,0,0,0.08)', fill: true, tension: 0.25 }] },
+          options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+              x: { ticks: { color: '#475569' }, grid: { display: false } },
+              y: { ticks: { color: '#475569' }, grid: { color: 'rgba(148,163,184,0.25)' } }
+            }
+          }
+        });
+      })
+      .catch(function(){
+        document.getElementById('wallet-total').textContent = '—';
+      });
+  }
+  run();
+})();
+</script>
+{% endblock %}
+

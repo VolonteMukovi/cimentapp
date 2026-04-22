@@ -15,6 +15,7 @@ urlpatterns = [
     path('parametres/sous-types/<int:soustype_id>/modifier/', views.SousTypeArticleUpdateView.as_view(), name='articles_soustype_update'),
     path('parametres/sous-types/<int:soustype_id>/supprimer/', views.SousTypeArticleDeleteView.as_view(), name='articles_soustype_delete'),
     path('creer/', views.ArticleCreateView.as_view(), name='article_create'),
+    path('api/articles/', views.ArticlesApiListView.as_view(), name='api_articles_list'),
     path('<str:article_id>/api/', views.ArticleJsonDetailView.as_view(), name='article_api_detail'),
     path('<str:article_id>/modifier/', views.ArticleUpdateView.as_view(), name='article_update'),
     path('<str:article_id>/supprimer/', views.ArticleDeleteView.as_view(), name='article_delete'),

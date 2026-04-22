@@ -1,0 +1,127 @@
+{% extends "base_app.html" %}
+{% block title %}Rapports — CimentApp{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <h1 class="text-2xl font-bold tracking-tight text-black">Rapports</h1>
+    <p class="mt-1 text-sm text-slate-600">Bénéfices par lot (FIFO), vue globale et filtres par période.</p>
+
+    <div class="mt-5 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtre</p>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <input id="date-from" placeholder="date_from (ISO)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <input id="date-to" placeholder="date_to (ISO)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        </div>
+        <button id="rep-refresh" class="mt-3 rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900">Actualiser</button>
+        <p id="rep-msg" class="mt-2 text-xs text-slate-600"></p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-black p-4 text-white">
+        <p class="text-xs font-semibold uppercase tracking-wide text-white/60">Note</p>
+        <p class="mt-2 text-sm text-white/80">Les bénéfices sont calculés à partir du coût FIFO (achat + dépenses unitaires) et du prix de vente saisi.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-base font-bold text-black">Bénéfices par lot</h2>
+    </div>
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Bénéfice (sur la page)</p>
+      <canvas id="rep-chart" height="140" aria-label="Graphique bénéfice par lot"></canvas>
+    </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-left text-sm">
+        <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="py-2 pr-4">Lot</th>
+            <th class="py-2 pr-4">Article</th>
+            <th class="py-2 pr-4">Qté</th>
+            <th class="py-2 pr-4">CA</th>
+            <th class="py-2 pr-4">Coût FIFO</th>
+            <th class="py-2 pr-4">Bénéfice</th>
+          </tr>
+        </thead>
+        <tbody id="rep-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+    <div class="mt-3 text-xs text-slate-600" id="rep-pager">—</div>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var page = 1;
+  var pageSize = 25;
+  var benefChart = null;
+
+  function qs(params) {
+    return Object.keys(params).filter(function(k){ return params[k] !== '' && params[k] != null; })
+      .map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+  }
+
+  function fetchReport() {
+    var df = (document.getElementById('date-from').value || '').trim();
+    var dt = (document.getElementById('date-to').value || '').trim();
+    var url = '/magasin/rapports/api/benefices-par-lot/?' + qs({ page: page, page_size: pageSize, date_from: df, date_to: dt });
+    var statsUrl = '/magasin/rapports/api/stats/?' + qs({ date_from: df, date_to: dt });
+    document.getElementById('rep-msg').textContent = '';
+    return Promise.all([
+      fetch(url, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
+      fetch(statsUrl, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
+    ]).then(function(res){
+        var data = res[0];
+        var stats = res[1];
+        var tb = document.getElementById('rep-tbody');
+        tb.innerHTML = '';
+        (data.results || []).forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="py-2 pr-4 font-semibold text-black">#' + r.lot_id + '</td>' +
+            '<td class="py-2 pr-4 font-mono text-xs text-slate-700">' + r.article_id + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums">' + r.quantite_vendue_fifo + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.chiffre_affaires + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums">' + r.cout_total_fifo + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.benefice_estime + '</td>';
+          tb.appendChild(tr);
+        });
+        document.getElementById('rep-pager').textContent =
+          'Page ' + data.page + ' — ' + (data.results || []).length + ' / ' + data.count;
+
+        var canvas = document.getElementById('rep-chart');
+        if (canvas && window.Chart) {
+          if (benefChart) benefChart.destroy();
+          var labels = (stats.results || []).map(function(r){ return r.day; });
+          var values = (stats.results || []).map(function(r){ return parseFloat(r.benefice || '0') || 0; });
+          benefChart = new Chart(canvas.getContext('2d'), {
+            type: 'bar',
+            data: { labels: labels, datasets: [{ label: 'Bénéfice', data: values, backgroundColor: 'rgba(0,0,0,0.85)' }] },
+            options: {
+              responsive: true,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#475569' }, grid: { display: false } },
+                y: { ticks: { color: '#475569' }, grid: { color: 'rgba(148,163,184,0.25)' } }
+              }
+            }
+          });
+        }
+    }).catch(function(){
+        document.getElementById('rep-pager').textContent = 'Erreur de chargement.';
+      });
+  }
+
+  document.getElementById('rep-refresh').addEventListener('click', function (e) {
+    e.preventDefault();
+    page = 1;
+    fetchReport();
+  });
+
+  fetchReport();
+})();
+</script>
+{% endblock %}
+

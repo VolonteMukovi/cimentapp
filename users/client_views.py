@@ -171,6 +171,85 @@ class ClientCatalogSimView(TemplateView):
         return ctx
 
 
+class ClientCatalogView(TemplateView):
+    """Catalogue réel : articles de l'entreprise active + images + prix catalogue."""
+
+    template_name = 'users/pages/client_catalogue.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
+
+        if not request.session.get(SESSION_CLIENT_ID):
+            return redirect('client_login')
+        if not request.session.get(SESSION_CLIENT_ACTIVE_ENTREPRISE_ID):
+            return redirect('client_entreprise_select')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
+        from users.models import Client
+        from articles.models import Article
+        from django.conf import settings
+
+        cid = self.request.session.get(SESSION_CLIENT_ID)
+        eid = int(self.request.session.get(SESSION_CLIENT_ACTIVE_ENTREPRISE_ID))
+        client = Client.objects.filter(pk=cid).first()
+        ctx['client'] = client
+        ctx['entreprise_id'] = eid
+
+        q = (self.request.GET.get('q') or '').strip()
+        qs = Article.objects.filter(entreprise_id=eid)
+        if q:
+            qs = qs.filter(nom__icontains=q)
+        qs = qs.order_by('nom')
+
+        try:
+            page = int(self.request.GET.get('page') or 1)
+        except Exception:
+            page = 1
+        if page < 1:
+            page = 1
+        page_size = 12
+        total = qs.count()
+        offset = (page - 1) * page_size
+        items = list(qs[offset : offset + page_size])
+
+        mu = settings.MEDIA_URL
+        if not str(mu).endswith('/'):
+            mu = f'{mu}/'
+        rows = []
+        for a in items:
+            main_img = ''
+            if isinstance(a.images, list):
+                for im in a.images:
+                    if isinstance(im, dict) and im.get('image') and im.get('is_main'):
+                        main_img = f"{mu}{str(im['image']).lstrip('/')}"
+                        break
+                if not main_img:
+                    for im in a.images:
+                        if isinstance(im, dict) and im.get('image'):
+                            main_img = f"{mu}{str(im['image']).lstrip('/')}"
+                            break
+            rows.append(
+                {
+                    'article_id': a.article_id,
+                    'nom': a.nom,
+                    'prix_catalogue': a.prix_catalogue,
+                    'image': main_img,
+                }
+            )
+
+        ctx['q'] = q
+        ctx['page'] = page
+        ctx['page_size'] = page_size
+        ctx['count'] = total
+        ctx['has_prev'] = page > 1
+        ctx['has_next'] = (offset + page_size) < total
+        ctx['results'] = rows
+        return ctx
+
+
 class ClientTransactionsSimView(TemplateView):
     """Simulation — historique des transactions (paiements, mouvements)."""
 
@@ -189,6 +268,12 @@ class ClientTransactionsSimView(TemplateView):
             'Export ou partage (phase ultérieure).',
         ]
         return ctx
+
+
+class ClientTransactionsView(TemplateView):
+    """Historique réel (les données viennent des APIs client sous /fr/client/commandes/api/...)."""
+
+    template_name = 'users/pages/client_transactions.html'
 
 
 class ClientOrdersSimView(TemplateView):
@@ -230,3 +315,19 @@ class ClientWalletSimView(TemplateView):
             'Lecture comptant / crédit à partir du solde garantie sur le tableau de bord.',
         ]
         return ctx
+
+
+class ClientWalletView(TemplateView):
+    """Vue réelle (simple) : activité commandes + total réservé sur entreprise active."""
+
+    template_name = 'users/pages/client_wallet.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
+
+        if not request.session.get(SESSION_CLIENT_ID):
+            return redirect('client_login')
+        if not request.session.get(SESSION_CLIENT_ACTIVE_ENTREPRISE_ID):
+            return redirect('client_entreprise_select')
+        return super().dispatch(request, *args, **kwargs)
+

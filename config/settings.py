@@ -21,6 +21,12 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1').split(',')
 INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'articles.apps.ArticlesConfig',
+    'lots.apps.LotsConfig',
+    'caisse.apps.CaisseConfig',
+    'ventes.apps.VentesConfig',
+    'rapports.apps.RapportsConfig',
+    'commandes.apps.CommandesConfig',
+    'clients.apps.ClientsConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

@@ -1,0 +1,153 @@
+{% extends "base_app.html" %}
+{% block title %}Caisse — CimentApp{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <div class="flex items-start justify-between gap-4">
+      <div class="min-w-0">
+        <h1 class="text-2xl font-bold tracking-tight text-black">Caisse</h1>
+        <p class="mt-1 text-sm text-slate-600">Sous-comptes dynamiques (cash, mobile money, banque), solde total et détail par caisse.</p>
+      </div>
+      <button id="caisse-refresh" class="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-300">Actualiser</button>
+    </div>
+
+    <div class="mt-5 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-black p-4 text-white">
+        <p class="text-xs font-semibold uppercase tracking-wide text-white/60">Total toutes caisses</p>
+        <p id="caisse-total" class="mt-1 text-3xl font-bold tabular-nums">—</p>
+        <p class="mt-1 text-xs text-white/60">Somme des soldes sur les sous-comptes.</p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Créer une caisse</p>
+        <form id="caisse-create-form" class="mt-2 grid gap-2">
+          <input name="nom" placeholder="Nom (ex: Cash, Banque, Mobile Money)" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <label class="flex items-center gap-2 text-xs text-slate-700">
+            <input name="actif" type="checkbox" checked class="h-4 w-4 rounded border-slate-300">
+            Active
+          </label>
+          <button class="mt-1 rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900" type="submit">Enregistrer</button>
+          <p id="caisse-create-msg" class="text-xs text-slate-600"></p>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-base font-bold text-black">Soldes par caisse</h2>
+    </div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Répartition des soldes</p>
+        <div class="mt-2">
+          <canvas id="caisse-chart" height="180" aria-label="Graphique répartition soldes"></canvas>
+        </div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Détail</p>
+        <div class="mt-3 overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="py-2 pr-4">Caisse</th>
+                <th class="py-2 pr-4">Solde</th>
+              </tr>
+            </thead>
+            <tbody id="caisse-tbody" class="divide-y divide-slate-100"></tbody>
+          </table>
+        </div>
+        <div class="mt-3 text-xs text-slate-600" id="caisse-pager">—</div>
+      </div>
+    </div>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var page = 1;
+  var pageSize = 25;
+  var donut = null;
+
+  function fetchSolde() {
+    return fetch('/magasin/caisse/api/stats/', { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        document.getElementById('caisse-total').textContent = (data.stats && data.stats.total) ? data.stats.total : '0.00';
+        var tb = document.getElementById('caisse-tbody');
+        tb.innerHTML = '';
+        var labels = [];
+        var values = [];
+        (data.results || []).forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="py-2 pr-4 font-semibold text-black">' + (r.nom || ('Caisse #' + r.caisse_id)) + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + (r.solde || '0.00') + '</td>';
+          tb.appendChild(tr);
+          labels.push(r.nom || ('#' + r.caisse_id));
+          values.push(parseFloat(r.solde || '0') || 0);
+        });
+        document.getElementById('caisse-pager').textContent = (data.results || []).length + ' caisses (stats)';
+
+        var canvas = document.getElementById('caisse-chart');
+        if (canvas && window.Chart) {
+          if (donut) donut.destroy();
+          donut = new Chart(canvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: values,
+                backgroundColor: [
+                  '#0f172a','#111827','#1f2937','#334155','#475569','#64748b','#94a3b8','#cbd5e1'
+                ],
+                borderWidth: 0
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: { legend: { position: 'bottom', labels: { color: '#0f172a' } } },
+              cutout: '68%'
+            }
+          });
+        }
+      })
+      .catch(function(){
+        document.getElementById('caisse-total').textContent = '—';
+        document.getElementById('caisse-pager').textContent = 'Erreur de chargement.';
+      });
+  }
+
+  document.getElementById('caisse-refresh').addEventListener('click', function (e) {
+    e.preventDefault();
+    fetchSolde();
+  });
+
+  document.getElementById('caisse-create-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.target;
+    var payload = { nom: form.nom.value, actif: !!form.actif.checked };
+    var msg = document.getElementById('caisse-create-msg');
+    msg.textContent = 'Enregistrement...';
+    fetch('/magasin/caisse/api/caisses/creer/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+      body: JSON.stringify(payload)
+    })
+      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
+      .then(function(res){
+        if (!res.ok || !res.json.ok) { msg.textContent = res.json.error || 'Erreur.'; return; }
+        msg.textContent = 'Caisse créée (#' + res.json.id + ').';
+        form.reset();
+        form.actif.checked = true;
+        fetchSolde();
+      })
+      .catch(function(){ msg.textContent = 'Erreur réseau.'; });
+  });
+
+  fetchSolde();
+})();
+</script>
+{% endblock %}
+

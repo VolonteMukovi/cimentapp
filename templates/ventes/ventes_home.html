@@ -1,0 +1,245 @@
+{% extends "base_app.html" %}
+{% block title %}Ventes — CimentApp{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <h1 class="text-2xl font-bold tracking-tight text-black">Ventes</h1>
+    <p class="mt-1 text-sm text-slate-600">Vente directe (client occasionnel possible), prix unitaire libre, sortie stock FIFO et encaissement en caisse.</p>
+
+    <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Nouvelle vente</p>
+      <form id="vente-form" class="mt-3 grid gap-2">
+        <div class="grid gap-2 sm:grid-cols-2">
+          <input name="client_nom" placeholder="Nom client (optionnel)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <select name="caisse_id" id="caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+            <option value="">— Choisir une caisse —</option>
+          </select>
+        </div>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <input name="devise" value="USD" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <input name="date_vente" placeholder="Date ISO (optionnel)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        </div>
+
+        <div class="mt-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
+          <div class="flex items-center justify-between">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Lignes</p>
+            <button id="add-line" type="button" class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-300">Ajouter</button>
+          </div>
+          <div id="lines" class="mt-2 grid gap-2"></div>
+        </div>
+
+        <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p class="text-sm text-slate-700">Total vente (estimé): <span id="vente-total-estime" class="font-semibold tabular-nums text-black">—</span></p>
+          <button class="rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900" type="submit">Valider vente</button>
+        </div>
+        <p id="vente-msg" class="text-sm text-slate-700"></p>
+      </form>
+    </div>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-base font-bold text-black">Ventes (récentes)</h2>
+      <button id="ventes-refresh" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-slate-300">Actualiser</button>
+    </div>
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Chiffre d’affaires (sur la page)</p>
+      <canvas id="ventes-chart" height="140" aria-label="Graphique CA ventes"></canvas>
+    </div>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full text-left text-sm">
+        <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="py-2 pr-4">Vente</th>
+            <th class="py-2 pr-4">Client</th>
+            <th class="py-2 pr-4">Total</th>
+            <th class="py-2 pr-4">Caisse</th>
+            <th class="py-2 pr-4">Date</th>
+          </tr>
+        </thead>
+        <tbody id="ventes-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+    <div class="mt-3 text-xs text-slate-600" id="ventes-pager">—</div>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  var ventesPage = 1;
+  var ventesPageSize = 10;
+  var linesEl = document.getElementById('lines');
+  var caChart = null;
+  var articlesCache = [];
+
+  function addLine(defaults) {
+    var row = document.createElement('div');
+    row.className = 'grid gap-2 sm:grid-cols-4';
+    row.innerHTML =
+      '<select name="article_id" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required><option value="">— Article —</option></select>' +
+      '<input name="quantite" type="number" inputmode="decimal" min="0.001" step="0.001" placeholder="Quantité" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>' +
+      '<input name="prix_unitaire_vente" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Prix unitaire" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>' +
+      '<button type="button" class="remove rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-red-200 hover:bg-red-50 hover:text-red-700">Retirer</button>';
+    row.querySelector('.remove').addEventListener('click', function(){ row.remove(); renderTotal(); });
+    var select = row.querySelector('select[name="article_id"]');
+    articlesCache.forEach(function(a){
+      var opt = document.createElement('option');
+      opt.value = a.article_id;
+      opt.textContent = a.nom + ' (' + a.article_id + ')';
+      opt.setAttribute('data-prix', a.prix_catalogue);
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', function () {
+      var chosen = select.options[select.selectedIndex];
+      var p = chosen ? chosen.getAttribute('data-prix') : '';
+      var prixEl = row.querySelector('input[name="prix_unitaire_vente"]');
+      if (prixEl && (!prixEl.value || prixEl.value === '0' || prixEl.value === '0.00')) {
+        prixEl.value = p || '';
+      }
+      renderTotal();
+    });
+    row.querySelector('input[name="quantite"]').addEventListener('input', renderTotal);
+    row.querySelector('input[name="prix_unitaire_vente"]').addEventListener('input', renderTotal);
+    if (defaults) {
+      select.value = defaults.article_id || '';
+      row.querySelector('input[name="quantite"]').value = defaults.quantite || '';
+      row.querySelector('input[name="prix_unitaire_vente"]').value = defaults.prix_unitaire_vente || '';
+    }
+    linesEl.appendChild(row);
+    renderTotal();
+  }
+
+  function toNum(v) {
+    var n = parseFloat(String(v || '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function renderTotal() {
+    var total = 0;
+    Array.prototype.slice.call(linesEl.children).forEach(function (row) {
+      var q = toNum(row.querySelector('input[name="quantite"]').value);
+      var p = toNum(row.querySelector('input[name="prix_unitaire_vente"]').value);
+      if (q > 0 && p >= 0) total += (q * p);
+    });
+    var out = document.getElementById('vente-total-estime');
+    if (out) out.textContent = total > 0 ? total.toFixed(2) : '—';
+  }
+  function bootLookups() {
+    return Promise.all([
+      fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
+      fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
+    ]).then(function(res){
+      var caisses = res[0];
+      var articles = res[1];
+      var caisseSel = document.getElementById('caisse-select');
+      (caisses.results || []).forEach(function(c){
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nom + ' (#' + c.id + ')';
+        caisseSel.appendChild(opt);
+      });
+      articlesCache = (articles.results || []).map(function(a){
+        return { article_id: a.article_id, nom: a.nom, prix_catalogue: a.prix_catalogue };
+      });
+      linesEl.innerHTML = '';
+      addLine();
+    }).catch(function(){ /* ignore */ });
+  }
+
+  function fetchVentes() {
+    var url = '/magasin/ventes/api/ventes/?page=' + ventesPage + '&page_size=' + ventesPageSize;
+    var statsUrl = '/magasin/ventes/api/stats/';
+    return Promise.all([
+      fetch(url, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
+      fetch(statsUrl, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
+    ]).then(function(res){
+        var data = res[0];
+        var stats = res[1];
+        var tb = document.getElementById('ventes-tbody');
+        tb.innerHTML = '';
+        (data.results || []).forEach(function (r) {
+          var tr = document.createElement('tr');
+          tr.innerHTML =
+            '<td class="py-2 pr-4 font-mono text-xs font-semibold text-black">' + r.vente_id + '</td>' +
+            '<td class="py-2 pr-4">' + (r.client_nom || '—') + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.total + ' ' + r.devise + '</td>' +
+            '<td class="py-2 pr-4">#' + (r.caisse_id || '—') + '</td>' +
+            '<td class="py-2 pr-4 text-slate-600">' + (r.date_vente || '').slice(0, 19).replace('T',' ') + '</td>';
+          tb.appendChild(tr);
+        });
+        document.getElementById('ventes-pager').textContent =
+          'Page ' + data.page + ' — ' + (data.results || []).length + ' / ' + data.count;
+
+        var labels = (stats.results || []).map(function(r){ return r.day; });
+        var values = (stats.results || []).map(function(r){ return parseFloat(r.ca || '0') || 0; });
+        var canvas = document.getElementById('ventes-chart');
+        if (canvas && window.Chart) {
+          if (caChart) caChart.destroy();
+          caChart = new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: { labels: labels, datasets: [{ label: 'CA (page)', data: values, borderColor: 'rgba(0,0,0,0.9)', backgroundColor: 'rgba(0,0,0,0.08)', fill: true, tension: 0.25 }] },
+            options: {
+              responsive: true,
+              plugins: { legend: { display: false } },
+              scales: {
+                x: { ticks: { color: '#475569' }, grid: { display: false } },
+                y: { ticks: { color: '#475569' }, grid: { color: 'rgba(148,163,184,0.25)' } }
+              }
+            }
+          });
+        }
+    }).catch(function(){ document.getElementById('ventes-pager').textContent = 'Erreur de chargement.'; });
+  }
+
+  document.getElementById('add-line').addEventListener('click', function(){ addLine(); });
+  document.getElementById('ventes-refresh').addEventListener('click', function(e){ e.preventDefault(); fetchVentes(); });
+  bootLookups();
+
+  document.getElementById('vente-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.target;
+    var msg = document.getElementById('vente-msg');
+    msg.textContent = 'Enregistrement...';
+    var lignes = [];
+    Array.prototype.slice.call(linesEl.children).forEach(function (row) {
+      var article = row.querySelector('select[name="article_id"]').value;
+      var qte = row.querySelector('input[name="quantite"]').value;
+      var prix = row.querySelector('input[name="prix_unitaire_vente"]').value;
+      if (!article) return;
+      lignes.push({ article_id: article, quantite: qte, prix_unitaire_vente: prix });
+    });
+    var payload = {
+      client_nom: form.client_nom.value,
+      caisse_id: form.caisse_id.value,
+      devise: form.devise.value,
+      date_vente: form.date_vente.value,
+      lignes: lignes
+    };
+    fetch('/magasin/ventes/api/vente-creer/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+      body: JSON.stringify(payload)
+    })
+      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, status: r.status, json: j }; }); })
+      .then(function(res){
+        if (!res.ok || !res.json.ok) {
+          msg.textContent = res.json.error || 'Erreur.';
+          return;
+        }
+        msg.textContent = 'Vente enregistrée: ' + res.json.vente_id + ' (total ' + res.json.total + ').';
+        form.reset();
+        form.devise.value = 'USD';
+        linesEl.innerHTML = '';
+        addLine();
+        fetchVentes();
+      })
+      .catch(function(){ msg.textContent = 'Erreur réseau.'; });
+  });
+
+  fetchVentes();
+})();
+</script>
+{% endblock %}
+

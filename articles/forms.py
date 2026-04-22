@@ -27,17 +27,6 @@ class TypeArticleForm(forms.ModelForm):
         }
 
 
-class SousTypeArticleForm(forms.ModelForm):
-    class Meta:
-        model = SousTypeArticle
-        fields = ('type', 'libelle', 'description')
-        widgets = {
-            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
-            'type': forms.Select(attrs={'class': 'art-input'}),
-            'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
-        }
-
-
 class ArticleForm(forms.ModelForm):
     """
     Champs modèle hors images (gérées en vue : upload + JSON).
@@ -60,11 +49,12 @@ class ArticleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        st_qs = SousTypeArticle.objects.select_related('type').order_by('type__libelle', 'libelle')
+        types = {t.id: t.libelle for t in TypeArticle.objects.all().order_by('libelle')}
+        st_qs = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
         self.fields['sous_type_article_id'] = forms.ChoiceField(
             label='Sous-type',
             choices=[('', '— Choisir un sous-type —')]
-            + [(str(st.id), f'{st.libelle} ({st.type.libelle})') for st in st_qs],
+            + [(str(st.id), f"{st.libelle} ({types.get(st.type_article_id, '—')})") for st in st_qs],
             required=True,
             widget=forms.Select(attrs={'class': 'art-input'}),
         )
@@ -106,3 +96,45 @@ class ArticleForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class SousTypeArticleForm(forms.ModelForm):
+    type_article_id = forms.ChoiceField(
+        label='Type',
+        required=True,
+        widget=forms.Select(attrs={'class': 'art-input'}),
+    )
+
+    class Meta:
+        model = SousTypeArticle
+        fields = ('type_article_id', 'libelle', 'description')
+        widgets = {
+            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
+            'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        t_qs = TypeArticle.objects.all().order_by('libelle')
+        self.fields['type_article_id'].choices = [('', '— Choisir un type —')] + [
+            (str(t.id), t.libelle) for t in t_qs
+        ]
+        inst = kwargs.get('instance')
+        if inst is not None:
+            self.fields['type_article_id'].initial = str(inst.type_article_id)
+
+    def clean_type_article_id(self):
+        v = self.cleaned_data.get('type_article_id')
+        if not v:
+            raise forms.ValidationError('Choisissez un type.')
+        pk = int(v)
+        if not TypeArticle.objects.filter(pk=pk).exists():
+            raise forms.ValidationError('Type invalide.')
+        return pk
+
+    def save(self, commit=True):
+        inst = super().save(commit=False)
+        inst.type_article_id = int(self.cleaned_data['type_article_id'])
+        if commit:
+            inst.save()
+        return inst

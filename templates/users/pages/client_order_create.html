@@ -1,0 +1,110 @@
+{% extends "base_client_app.html" %}
+{% block title %}Réserver — Espace client{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <h1 class="text-2xl font-bold tracking-tight text-black">Nouvelle réservation</h1>
+    <p class="mt-1 text-sm text-slate-600">Sélectionnez un produit, la quantité, et optionnellement une preuve de paiement ou une caisse de dépôt.</p>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <form action="" method="post" enctype="multipart/form-data" class="grid gap-3">
+      {% csrf_token %}
+      <div class="grid gap-2">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Produit</label>
+        <select name="article_id" id="client-article-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <option value="">— Choisir un produit —</option>
+        </select>
+        <p id="client-article-price" class="text-xs text-slate-600"></p>
+      </div>
+      <div class="grid gap-2">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Quantité</label>
+        <input name="quantite" id="client-qte" type="number" inputmode="decimal" min="0.001" step="0.001" placeholder="Quantité" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <p id="client-estime" class="text-xs text-slate-600"></p>
+      </div>
+      <div class="grid gap-2">
+        <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Moyen de paiement / dépôt (optionnel)</label>
+        <select name="caisse_id" id="client-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <option value="">— Choisir (optionnel) —</option>
+        </select>
+        <p class="text-[11px] text-slate-500">Si vous indiquez un dépôt, vous pouvez aussi joindre une preuve de paiement.</p>
+      </div>
+      <textarea name="note_client" placeholder="Note (optionnel)" rows="3" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none"></textarea>
+      <div>
+        <label class="block text-xs font-semibold uppercase tracking-wide text-slate-500">Preuve de paiement (optionnel)</label>
+        <input type="file" name="preuve_paiement" accept="image/*" class="mt-2 block w-full text-sm">
+      </div>
+      <button class="rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900" type="submit">Envoyer</button>
+      <a href="{% url 'client_catalogue' %}" class="text-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-2 hover:text-black">Retour catalogue</a>
+    </form>
+  </section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var articleSel = document.getElementById('client-article-select');
+  var caisseSel = document.getElementById('client-caisse-select');
+  var priceEl = document.getElementById('client-article-price');
+
+  function boot() {
+    fetch('/fr/client/commandes/api/lookups/', { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var look = (data.results || {});
+        var articles = look.articles || [];
+        var caisses = look.caisses || [];
+
+        // articles
+        articles.forEach(function(a){
+          var opt = document.createElement('option');
+          opt.value = a.article_id;
+          opt.textContent = a.nom + ' (' + a.article_id + ')';
+          opt.setAttribute('data-prix', a.prix_catalogue || '0');
+          articleSel.appendChild(opt);
+        });
+        // caisses
+        caisses.forEach(function(c){
+          var opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = c.nom;
+          caisseSel.appendChild(opt);
+        });
+
+        // preselect from querystring
+        var preset = "{{ request.GET.article_id|default:'' }}";
+        if (preset) articleSel.value = preset;
+        renderPrice();
+      })
+      .catch(function(){});
+  }
+
+  function renderPrice() {
+    var opt = articleSel.options[articleSel.selectedIndex];
+    var p = opt ? opt.getAttribute('data-prix') : '';
+    if (!p || articleSel.value === '') { priceEl.textContent = ''; return; }
+    priceEl.textContent = 'Prix catalogue: ' + p + ' USD (le prix réel sera confirmé par l’entreprise)';
+    renderEstime();
+  }
+
+  function toNum(v) {
+    var n = parseFloat(String(v || '').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+  function renderEstime() {
+    var opt = articleSel.options[articleSel.selectedIndex];
+    var p = opt ? toNum(opt.getAttribute('data-prix')) : 0;
+    var q = toNum(document.getElementById('client-qte').value);
+    var t = q * p;
+    var el = document.getElementById('client-estime');
+    if (!articleSel.value || !q || !p) { el.textContent = ''; return; }
+    el.textContent = 'Total estimé: ' + t.toFixed(2) + ' USD';
+  }
+
+  articleSel.addEventListener('change', renderPrice);
+  document.getElementById('client-qte').addEventListener('input', renderEstime);
+  boot();
+})();
+</script>
+{% endblock %}
+

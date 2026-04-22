@@ -17,6 +17,7 @@ ICONS = {
     'chart': 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
     'building': 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
     'user': 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
+    'users': 'M17 20h5v-2a4 4 0 00-4-4h-1m-4 6H2v-2a4 4 0 014-4h1m6 6v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2m10-10a4 4 0 11-8 0 4 4 0 018 0zm6 2a3 3 0 11-6 0 3 3 0 016 0z',
 }
 
 R_SUPER = User.Role.SUPERADMIN
@@ -90,6 +91,14 @@ STAFF_NAV_ENTRIES: list[dict[str, Any]] = [
         'roles': FULL,
     },
     {
+        'id': 'clients',
+        'url_name': 'store_clients',
+        'label': 'Clients',
+        'icon': 'users',
+        'match': ('store_clients',),
+        'roles': FULL,
+    },
+    {
         'id': 'entreprises',
         'url_name': 'entreprise_list',
         'label': 'Entrep.',
@@ -135,7 +144,7 @@ def staff_nav_for_user(user) -> list[dict[str, Any]]:
 
 
 STORE_MODULE_KEYS = frozenset(
-    {'articles', 'articles_settings', 'lots', 'caisse', 'ventes', 'commandes', 'rapports'},
+    {'articles', 'articles_settings', 'lots', 'caisse', 'ventes', 'commandes', 'rapports', 'clients'},
 )
 
 STORE_MODULE_LABELS = {
@@ -146,6 +155,7 @@ STORE_MODULE_LABELS = {
     'ventes': 'Ventes',
     'commandes': 'Commandes clients',
     'rapports': 'Rapports',
+    'clients': 'Clients & garanties',
 }
 
 # Agent : pas lots ni rapports (écriture / pilotage étendu)

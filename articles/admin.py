@@ -11,8 +11,8 @@ class TypeArticleAdmin(admin.ModelAdmin):
 
 @admin.register(SousTypeArticle)
 class SousTypeArticleAdmin(admin.ModelAdmin):
-    list_display = ('id', 'type', 'libelle')
-    list_filter = ('type',)
+    list_display = ('id', 'type_article_id', 'libelle')
+    list_filter = ('type_article_id',)
     search_fields = ('libelle', 'description')
 
 
