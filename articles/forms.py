@@ -99,7 +99,10 @@ class ArticleForm(forms.ModelForm):
 
 
 class SousTypeArticleForm(forms.ModelForm):
-    type_article_id = forms.ChoiceField(
+    """Champ métier `type_article` (select) → `instance.type_article_id` à l’enregistrement.
+    Évite le conflit ModelForm / champ modèle homonyme `type_article_id`."""
+
+    type_article = forms.ChoiceField(
         label='Type',
         required=True,
         widget=forms.Select(attrs={'class': 'art-input'}),
@@ -107,7 +110,7 @@ class SousTypeArticleForm(forms.ModelForm):
 
     class Meta:
         model = SousTypeArticle
-        fields = ('type_article_id', 'libelle', 'description')
+        fields = ('libelle', 'description')
         widgets = {
             'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '255', 'autocomplete': 'off'}),
             'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
@@ -116,15 +119,15 @@ class SousTypeArticleForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         t_qs = TypeArticle.objects.all().order_by('libelle')
-        self.fields['type_article_id'].choices = [('', '— Choisir un type —')] + [
+        self.fields['type_article'].choices = [('', '— Choisir un type —')] + [
             (str(t.id), t.libelle) for t in t_qs
         ]
         inst = kwargs.get('instance')
         if inst is not None:
-            self.fields['type_article_id'].initial = str(inst.type_article_id)
+            self.fields['type_article'].initial = str(inst.type_article_id)
 
-    def clean_type_article_id(self):
-        v = self.cleaned_data.get('type_article_id')
+    def clean_type_article(self):
+        v = self.cleaned_data.get('type_article')
         if not v:
             raise forms.ValidationError('Choisissez un type.')
         pk = int(v)
@@ -134,7 +137,7 @@ class SousTypeArticleForm(forms.ModelForm):
 
     def save(self, commit=True):
         inst = super().save(commit=False)
-        inst.type_article_id = int(self.cleaned_data['type_article_id'])
+        inst.type_article_id = int(self.cleaned_data['type_article'])
         if commit:
             inst.save()
         return inst

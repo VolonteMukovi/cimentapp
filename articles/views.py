@@ -477,7 +477,7 @@ class TypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['prefix'] = 'type_edit'
+        kwargs['prefix'] = 'type'
         kwargs['instance'] = self.obj
         return kwargs
 
@@ -517,7 +517,7 @@ class SousTypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        kwargs['prefix'] = 'soustype_edit'
+        kwargs['prefix'] = 'sous_type'
         kwargs['instance'] = self.obj
         return kwargs
 
