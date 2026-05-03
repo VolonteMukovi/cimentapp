@@ -1,239 +1,230 @@
 {% extends "base_app.html" %}
-{% block title %}Lots & stock — CimentApp{% endblock %}
+{% block title %}Lots & Transit — CimentApp{% endblock %}
 
 {% block content %}
   <section class="app-surface-card overflow-hidden p-6 sm:p-7">
-    <div class="flex items-start justify-between gap-4">
-      <div class="min-w-0">
-        <h1 class="text-2xl font-bold tracking-tight text-black">Lots & stock</h1>
-        <p class="mt-1 text-sm text-slate-600">Suivi des entrées de stock par lot, quantité restante en temps réel, FIFO.</p>
-      </div>
-      <a href="{% url 'store_articles' %}" class="shrink-0 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-300">Voir articles</a>
-    </div>
-
-    <div class="mt-5 grid gap-3 sm:grid-cols-2">
-      <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Stock restant</p>
-        <p id="stock-total-kpi" class="mt-1 text-2xl font-bold tabular-nums text-black">—</p>
-        <p class="mt-1 text-xs text-slate-500">Somme des quantités restantes sur tous les lots (entreprise active).</p>
-        <div class="mt-3">
-          <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Top produits (restant)</p>
-          <div class="mt-2 rounded-2xl border border-slate-200 bg-white p-3">
-            <canvas id="stock-chart" height="120" aria-label="Graphique stock restant"></canvas>
-          </div>
-        </div>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Créer un lot</p>
-        <form id="lot-create-form" class="mt-2 grid gap-2">
-          <select name="article_id" id="lot-article-select" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
-            <option value="">— Choisir un article —</option>
-          </select>
-          <div class="grid grid-cols-2 gap-2">
-            <input name="quantite_entree" type="number" inputmode="decimal" min="0.001" step="0.001" placeholder="Quantité" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
-            <input name="cout_unitaire_achat" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Coût unitaire" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
-          </div>
-          <div class="flex items-center justify-between text-xs text-slate-600">
-            <span>Total estimé</span>
-            <span class="font-semibold tabular-nums text-black" id="lot-total-estime">—</span>
-          </div>
-          <input name="reference" placeholder="Référence (optionnel)" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
-          <button class="mt-1 rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900" type="submit">Enregistrer</button>
-          <p id="lot-create-msg" class="text-xs text-slate-600"></p>
-        </form>
-      </div>
+    <h1 class="text-2xl font-bold tracking-tight text-black">Lots & Transit</h1>
+    <p class="mt-1 text-sm text-slate-600">Gestion des lots multi-articles, frais logistiques, financement multi-caisses et suivi FIFO.</p>
+    <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-3"><p class="text-xs text-slate-500">Total lots</p><p id="kpi-total" class="text-xl font-bold text-black">0</p></div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-3"><p class="text-xs text-slate-500">En transit</p><p id="kpi-transit" class="text-xl font-bold text-black">0</p></div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-3"><p class="text-xs text-slate-500">Arrivés</p><p id="kpi-arrive" class="text-xl font-bold text-black">0</p></div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-3"><p class="text-xs text-slate-500">Clôturés</p><p id="kpi-cloture" class="text-xl font-bold text-black">0</p></div>
     </div>
   </section>
 
   <section class="app-surface-card p-5 sm:p-6">
-    <div class="flex items-center justify-between gap-3">
-      <h2 class="text-base font-bold text-black">Lots (récents)</h2>
-      <div class="flex items-center gap-2">
-        <select id="lot-filter-article" class="w-64 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
-          <option value="">Tous les articles</option>
-        </select>
-        <button id="lot-refresh" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-slate-300">Actualiser</button>
-      </div>
+    <h2 class="text-base font-bold text-black">Nouveau lot transit</h2>
+    <div class="mt-3 grid gap-2 sm:grid-cols-2">
+      <input id="lot-reference" placeholder="Référence (ex: LOT_2026_001)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <input id="lot-fournisseur" placeholder="Fournisseur" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <input id="lot-date-expedition" type="date" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <input id="lot-date-arrivee" type="date" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
     </div>
-    <div class="mt-4 overflow-x-auto">
-      <table class="min-w-full text-left text-sm">
-        <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          <tr>
-            <th class="py-2 pr-4">Lot</th>
-            <th class="py-2 pr-4">Article</th>
-            <th class="py-2 pr-4">Entrée</th>
-            <th class="py-2 pr-4">Restant</th>
-            <th class="py-2 pr-4">Coût u.</th>
-            <th class="py-2 pr-4">Date</th>
-          </tr>
-        </thead>
-        <tbody id="lots-tbody" class="divide-y divide-slate-100"></tbody>
-      </table>
+
+    <div class="mt-4 rounded-2xl border border-slate-200 p-3">
+      <div class="mb-2 flex items-center justify-between"><p class="text-sm font-semibold text-black">Articles du lot</p><button id="add-article-row" class="rounded-xl border border-slate-200 px-2 py-1 text-xs font-semibold">+ Article</button></div>
+      <div id="article-rows" class="space-y-2"></div>
     </div>
-    <div class="mt-3 flex items-center justify-between text-xs text-slate-600">
-      <p id="lots-pager">—</p>
-      <div class="flex items-center gap-2">
-        <button id="lots-prev" class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 font-semibold hover:border-slate-300">Préc.</button>
-        <button id="lots-next" class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 font-semibold hover:border-slate-300">Suiv.</button>
-      </div>
+
+    <div class="mt-4 rounded-2xl border border-slate-200 p-3">
+      <div class="mb-2 flex items-center justify-between"><p class="text-sm font-semibold text-black">Frais du lot</p><button id="add-fee-row" class="rounded-xl border border-slate-200 px-2 py-1 text-xs font-semibold">+ Frais</button></div>
+      <div id="fee-rows" class="space-y-2"></div>
     </div>
+
+    <div class="mt-3 text-sm text-slate-700">
+      Coût articles: <span id="sum-articles" class="font-semibold">0.00</span> |
+      Frais: <span id="sum-fees" class="font-semibold">0.00</span> |
+      Total lot: <span id="sum-total" class="font-semibold text-black">0.00</span>
+    </div>
+    <button id="save-lot-transit" class="mt-3 rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white">Valider le lot</button>
+    <p id="lot-msg" class="mt-2 text-xs text-slate-600"></p>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex items-center justify-between">
+      <h2 class="text-base font-bold text-black">Lots enregistrés</h2>
+      <button id="refresh-lots" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">Actualiser</button>
+    </div>
+    <div id="lots-list" class="mt-4 space-y-2"></div>
   </section>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-(function () {
-  var page = 1;
-  var pageSize = 10;
-  var stockChart = null;
+(function(){
+  var articlesOptions = [];
+  var caissesOptions = [];
 
-  function qs(params) {
-    return Object.keys(params).filter(function(k){ return params[k] !== '' && params[k] != null; })
-      .map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+  function num(v){ var n = parseFloat(String(v||'').replace(',', '.')); return isNaN(n) ? 0 : n; }
+  function qs(params){ return Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&'); }
+  function optionHtml(list, placeholder){
+    return '<option value="">'+placeholder+'</option>' + list.map(function(x){ return '<option value="'+x.id+'">'+x.label+'</option>'; }).join('');
   }
-
-  function fetchLots() {
-    var articleId = (document.getElementById('lot-filter-article').value || '').trim();
-    var url = '/magasin/lots/api/lots/?' + qs({ page: page, page_size: pageSize, article_id: articleId });
-    return fetch(url, { headers: { 'Accept': 'application/json' }})
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        var tb = document.getElementById('lots-tbody');
-        tb.innerHTML = '';
-        (data.results || []).forEach(function (row) {
-          var tr = document.createElement('tr');
-          tr.innerHTML =
-            '<td class="py-2 pr-4 font-semibold text-black">#' + row.id + '</td>' +
-            '<td class="py-2 pr-4 font-mono text-xs text-slate-700">' + row.article_id + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums">' + row.quantite_entree + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + row.quantite_restante + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums">' + row.cout_unitaire_achat + '</td>' +
-            '<td class="py-2 pr-4 text-slate-600">' + (row.date_entree || '').slice(0, 19).replace('T', ' ') + '</td>';
-          tb.appendChild(tr);
-        });
-        document.getElementById('lots-pager').textContent =
-          'Page ' + data.page + ' — ' + (data.results || []).length + ' / ' + data.count;
-      })
-      .catch(function(){
-        document.getElementById('lots-pager').textContent = 'Erreur de chargement.';
+  function refreshDynamicSelects(){
+    document.querySelectorAll('.article-id').forEach(function(sel){
+      var v = sel.value;
+      sel.innerHTML = optionHtml(articlesOptions, 'Article');
+      sel.value = v;
+    });
+    document.querySelectorAll('.fin-caisse, .fee-caisse').forEach(function(sel){
+      var v = sel.value;
+      sel.innerHTML = optionHtml(caissesOptions, 'Sous-compte');
+      sel.value = v;
+    });
+  }
+  function recalcTotals(){
+    var sA = 0;
+    document.querySelectorAll('.article-row').forEach(function(row){ sA += num(row.querySelector('.qte').value) * num(row.querySelector('.pu').value); });
+    var sF = 0;
+    document.querySelectorAll('.fee-row').forEach(function(row){ sF += num(row.querySelector('.fee-montant').value); });
+    document.getElementById('sum-articles').textContent = sA.toFixed(2);
+    document.getElementById('sum-fees').textContent = sF.toFixed(2);
+    document.getElementById('sum-total').textContent = (sA + sF).toFixed(2);
+  }
+  function bindRowEvents(root){
+    root.querySelectorAll('input').forEach(function(i){ i.addEventListener('input', recalcTotals); });
+    root.querySelectorAll('.remove-row').forEach(function(b){ b.addEventListener('click', function(){ b.closest('.row-wrap').remove(); recalcTotals(); }); });
+  }
+  function addArticleRow(){
+    var wrap = document.createElement('div');
+    wrap.className = 'row-wrap article-row rounded-xl border border-slate-200 p-2';
+    wrap.innerHTML =
+      '<div class="grid gap-2 sm:grid-cols-4">'+
+      '<select class="article-id rounded-xl border border-slate-200 px-2 py-2 text-sm">'+optionHtml(articlesOptions, 'Article')+'</select>'+
+      '<input class="qte rounded-xl border border-slate-200 px-2 py-2 text-sm" type="number" min="0.001" step="0.001" placeholder="Quantité">'+
+      '<input class="pu rounded-xl border border-slate-200 px-2 py-2 text-sm" type="number" min="0" step="0.01" placeholder="PU achat">'+
+      '<button class="remove-row rounded-xl border border-red-200 px-2 py-2 text-xs text-red-700">Retirer</button></div>'+
+      '<div class="mt-2"><p class="text-xs font-semibold text-slate-600">Financements (caisse + montant)</p><div class="article-financements space-y-1"></div><button class="add-fin rounded-xl border border-slate-200 px-2 py-1 text-xs mt-1">+ Financement</button></div>';
+    document.getElementById('article-rows').appendChild(wrap);
+    wrap.querySelector('.add-fin').addEventListener('click', function(e){ e.preventDefault(); addFinancementRow(wrap.querySelector('.article-financements')); });
+    bindRowEvents(wrap);
+    addFinancementRow(wrap.querySelector('.article-financements'));
+  }
+  function addFinancementRow(container){
+    var row = document.createElement('div');
+    row.className = 'row-wrap grid gap-2 sm:grid-cols-3';
+    row.innerHTML =
+      '<select class="fin-caisse rounded-xl border border-slate-200 px-2 py-2 text-sm">'+optionHtml(caissesOptions, 'Sous-compte')+'</select>'+
+      '<input class="fin-montant rounded-xl border border-slate-200 px-2 py-2 text-sm" type="number" min="0.01" step="0.01" placeholder="Montant">'+
+      '<button class="remove-row rounded-xl border border-red-200 px-2 py-2 text-xs text-red-700">Retirer</button>';
+    container.appendChild(row);
+    bindRowEvents(row);
+  }
+  function addFeeRow(){
+    var wrap = document.createElement('div');
+    wrap.className = 'row-wrap fee-row grid gap-2 sm:grid-cols-4 rounded-xl border border-slate-200 p-2';
+    wrap.innerHTML =
+      '<input class="fee-libelle rounded-xl border border-slate-200 px-2 py-2 text-sm" placeholder="Libellé frais">'+
+      '<input class="fee-montant rounded-xl border border-slate-200 px-2 py-2 text-sm" type="number" min="0" step="0.01" placeholder="Montant">'+
+      '<select class="fee-caisse rounded-xl border border-slate-200 px-2 py-2 text-sm">'+optionHtml(caissesOptions, 'Sous-compte')+'</select>'+
+      '<button class="remove-row rounded-xl border border-red-200 px-2 py-2 text-xs text-red-700">Retirer</button>';
+    document.getElementById('fee-rows').appendChild(wrap);
+    bindRowEvents(wrap);
+  }
+  function collectPayload(){
+    var articles = [];
+    document.querySelectorAll('.article-row').forEach(function(row){
+      var financements = [];
+      row.querySelectorAll('.article-financements .row-wrap').forEach(function(fr){
+        financements.push({ caisse_id: fr.querySelector('.fin-caisse').value, montant: fr.querySelector('.fin-montant').value });
+      });
+      articles.push({
+        article_id: row.querySelector('.article-id').value,
+        quantite: row.querySelector('.qte').value,
+        prix_unitaire_achat: row.querySelector('.pu').value,
+        financements: financements
+      });
+    });
+    var frais = [];
+    document.querySelectorAll('.fee-row').forEach(function(row){
+      frais.push({ libelle: row.querySelector('.fee-libelle').value, montant: row.querySelector('.fee-montant').value, caisse_id: row.querySelector('.fee-caisse').value });
+    });
+    return {
+      reference: document.getElementById('lot-reference').value,
+      fournisseur: document.getElementById('lot-fournisseur').value,
+      date_expedition: document.getElementById('lot-date-expedition').value,
+      date_arrivee_prevue: document.getElementById('lot-date-arrivee').value,
+      articles: articles,
+      frais: frais
+    };
+  }
+  function fetchStats(){
+    fetch('/magasin/lots/api/lots-transit/stats/', { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); }).then(function(d){
+        var s = d.stats || {};
+        document.getElementById('kpi-total').textContent = s.total || 0;
+        document.getElementById('kpi-transit').textContent = s.en_transit || 0;
+        document.getElementById('kpi-arrive').textContent = s.arrive || 0;
+        document.getElementById('kpi-cloture').textContent = s.cloture || 0;
       });
   }
-
-  function fetchStockTotal() {
-    return fetch('/magasin/lots/api/stats/?top_n=8', { headers: { 'Accept': 'application/json' }})
-      .then(function(r){ return r.json(); })
-      .then(function(data){
-        document.getElementById('stock-total-kpi').textContent = (data.stats && data.stats.stock_total) ? data.stats.stock_total : '0';
-
-        var top = (data.results || []).map(function (r) {
-          return { article_id: r.article_id, v: parseFloat(r.quantite_restante || '0') || 0 };
+  function fetchLots(){
+    fetch('/magasin/lots/api/lots-transit/?'+qs({page:1,page_size:30}), { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); }).then(function(data){
+        var wrap = document.getElementById('lots-list');
+        wrap.innerHTML = '';
+        (data.results||[]).forEach(function(lot){
+          var card = document.createElement('div');
+          card.className = 'rounded-2xl border border-slate-200 bg-white p-3';
+          card.innerHTML =
+            '<div class="flex items-center justify-between gap-2"><p class="font-semibold text-black">'+lot.reference+'</p>'+
+            '<select data-id="'+lot.id+'" class="lot-status rounded-xl border border-slate-200 px-2 py-1 text-xs">'+
+            '<option value="en_transit" '+(lot.statut==='en_transit'?'selected':'')+'>En transit</option>'+
+            '<option value="arrive" '+(lot.statut==='arrive'?'selected':'')+'>Arrivé</option>'+
+            '<option value="cloture" '+(lot.statut==='cloture'?'selected':'')+' disabled>Clôturé</option>'+
+            '</select></div>'+
+            '<p class="text-xs text-slate-600 mt-1">'+lot.fournisseur+' — exp: '+lot.date_expedition+' — arr: '+lot.date_arrivee_prevue+'</p>'+
+            '<p class="text-xs font-semibold text-slate-700 mt-1">Coût total: '+lot.cout_total_lot+'</p>';
+          wrap.appendChild(card);
         });
-        var labels = top.map(function(x){ return x.article_id; });
-        var values = top.map(function(x){ return x.v; });
-
-        var canvas = document.getElementById('stock-chart');
-        if (canvas && window.Chart) {
-          if (stockChart) stockChart.destroy();
-          stockChart = new Chart(canvas.getContext('2d'), {
-            type: 'bar',
-            data: { labels: labels, datasets: [{ label: 'Stock restant', data: values, backgroundColor: 'rgba(0,0,0,0.85)' }] },
-            options: {
-              responsive: true,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: '#475569' }, grid: { display: false } },
-                y: { ticks: { color: '#475569' }, grid: { color: 'rgba(148,163,184,0.25)' } }
-              }
-            }
+        wrap.querySelectorAll('.lot-status').forEach(function(sel){
+          sel.addEventListener('change', function(){
+            fetch('/magasin/lots/api/lots-transit/'+sel.getAttribute('data-id')+'/statut/', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+              body: JSON.stringify({ statut: sel.value })
+            }).then(function(){ fetchLots(); fetchStats(); });
           });
-        }
-      })
-      .catch(function(){ document.getElementById('stock-total-kpi').textContent = '—'; });
+        });
+      });
   }
-
-  document.getElementById('lot-refresh').addEventListener('click', function (e) {
-    e.preventDefault();
-    fetchLots();
-    fetchStockTotal();
-  });
-  document.getElementById('lots-prev').addEventListener('click', function () {
-    if (page > 1) { page -= 1; fetchLots(); }
-  });
-  document.getElementById('lots-next').addEventListener('click', function () {
-    page += 1; fetchLots();
-  });
-
-  document.getElementById('lot-create-form').addEventListener('submit', function (e) {
-    e.preventDefault();
-    var form = e.target;
-    var payload = {
-      article_id: form.article_id.value,
-      quantite_entree: form.quantite_entree.value,
-      cout_unitaire_achat: form.cout_unitaire_achat.value,
-      reference: form.reference.value
-    };
-    var msg = document.getElementById('lot-create-msg');
-    msg.textContent = 'Enregistrement...';
-    fetch('/magasin/lots/api/lots/creer/', {
+  document.getElementById('add-article-row').addEventListener('click', function(e){ e.preventDefault(); addArticleRow(); });
+  document.getElementById('add-fee-row').addEventListener('click', function(e){ e.preventDefault(); addFeeRow(); });
+  document.getElementById('refresh-lots').addEventListener('click', function(){ fetchLots(); fetchStats(); });
+  document.getElementById('save-lot-transit').addEventListener('click', function(){
+    var msg = document.getElementById('lot-msg');
+    msg.textContent = 'Validation en cours...';
+    fetch('/magasin/lots/api/lots-transit/creer/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
-      body: JSON.stringify(payload)
-    })
-      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, status: r.status, json: j }; }); })
+      body: JSON.stringify(collectPayload())
+    }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,json:j}; }); })
       .then(function(res){
-        if (!res.ok || !res.json.ok) { msg.textContent = res.json.error || 'Erreur.'; return; }
-        msg.textContent = 'Lot enregistré (#' + res.json.id + ').';
-        form.reset();
-        page = 1;
+        if (!res.ok || !res.json.ok){ msg.textContent = res.json.error || 'Erreur de validation'; return; }
+        msg.textContent = 'Lot '+res.json.reference+' enregistré. Coût total: '+res.json.cout_total_lot;
+        document.getElementById('article-rows').innerHTML = '';
+        document.getElementById('fee-rows').innerHTML = '';
+        addArticleRow();
+        recalcTotals();
         fetchLots();
-        fetchStockTotal();
-      })
-      .catch(function(){ msg.textContent = 'Erreur réseau.'; });
+        fetchStats();
+      }).catch(function(){ msg.textContent = 'Erreur réseau'; });
   });
 
-  fetchLots();
-  fetchStockTotal();
-
-  // bootstrap articles select
   fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }})
-    .then(function(r){ return r.json(); })
-    .then(function(data){
-      var sel = document.getElementById('lot-article-select');
-      var selFilter = document.getElementById('lot-filter-article');
-      (data.results || []).forEach(function(a){
-        var opt = document.createElement('option');
-        opt.value = a.article_id;
-        opt.textContent = a.nom + ' (' + a.article_id + ')';
-        sel.appendChild(opt);
-
-        var opt2 = document.createElement('option');
-        opt2.value = a.article_id;
-        opt2.textContent = a.nom + ' (' + a.article_id + ')';
-        selFilter.appendChild(opt2);
-      });
-    })
-    .catch(function(){});
-
-  // calcul total estimé (qte * coût)
-  (function () {
-    var form = document.getElementById('lot-create-form');
-    var out = document.getElementById('lot-total-estime');
-    if (!form || !out) return;
-    function toNum(v) {
-      var n = parseFloat(String(v || '').replace(',', '.'));
-      return isNaN(n) ? 0 : n;
-    }
-    function render() {
-      var q = toNum(form.quantite_entree.value);
-      var c = toNum(form.cout_unitaire_achat.value);
-      var t = q * c;
-      out.textContent = (t > 0) ? t.toFixed(2) : '—';
-    }
-    form.quantite_entree.addEventListener('input', render);
-    form.cout_unitaire_achat.addEventListener('input', render);
-    render();
-  })();
+    .then(function(r){ return r.json(); }).then(function(data){
+      articlesOptions = (data.results||[]).map(function(a){ return { id: a.article_id, label: a.nom+' ('+a.article_id+')' }; });
+      if (!document.querySelector('.article-row')) addArticleRow();
+      refreshDynamicSelects();
+    });
+  fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }})
+    .then(function(r){ return r.json(); }).then(function(data){
+      caissesOptions = (data.results||[]).map(function(c){ return { id: c.id, label: c.nom+' (#'+c.id+')' }; });
+      refreshDynamicSelects();
+    });
+  fetchLots();
+  fetchStats();
 })();
 </script>
 {% endblock %}

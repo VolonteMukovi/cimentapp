@@ -14,6 +14,7 @@ from django.views.generic import TemplateView, View
 from caisse.models import MouvementCaisse
 from commandes.models import ClientSoldeMouvement, Commande, CommandeLigne
 from lots.models import DepenseLot, LotStock
+from lots.services import sync_lot_transit_closure
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
 from users.navigation import can_access_store_module
@@ -260,6 +261,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
                     continue
                 lot.quantite_restante = lot.quantite_restante - take
                 lot.save(update_fields=['quantite_restante'])
+                sync_lot_transit_closure(lot.lot_transit_id)
 
                 exp_total = exp_map.get(lot.id, Decimal('0'))
                 exp_unit = (exp_total / lot.quantite_entree) if lot.quantite_entree else Decimal('0')

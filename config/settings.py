@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'rapports.apps.RapportsConfig',
     'commandes.apps.CommandesConfig',
     'clients.apps.ClientsConfig',
+    'fournisseurs.apps.FournisseursConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
