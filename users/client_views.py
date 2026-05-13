@@ -190,6 +190,7 @@ class ClientCatalogView(TemplateView):
         from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
         from users.models import Client
         from articles.models import Article
+        from articles.currency import get_primary_currency_code
         from django.conf import settings
 
         cid = self.request.session.get(SESSION_CLIENT_ID)
@@ -197,6 +198,7 @@ class ClientCatalogView(TemplateView):
         client = Client.objects.filter(pk=cid).first()
         ctx['client'] = client
         ctx['entreprise_id'] = eid
+        ctx['devise_principale_code'] = get_primary_currency_code(eid)
 
         q = (self.request.GET.get('q') or '').strip()
         qs = Article.objects.filter(entreprise_id=eid)

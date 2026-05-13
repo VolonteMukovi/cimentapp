@@ -3,8 +3,10 @@ from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.db import transaction
+from decimal import Decimal
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import FormView, ListView, RedirectView, TemplateView
 from django.views.generic.edit import CreateView
 
@@ -168,6 +170,13 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         else:
             ctx['dashboard_store_links'] = []
         eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        ctx['dashboard_currency'] = 'USD'
+        ctx['dashboard_total_ventes'] = Decimal('0')
+        ctx['dashboard_ventes_jour'] = Decimal('0')
+        ctx['dashboard_total_caisse'] = Decimal('0')
+        ctx['dashboard_dettes_clients'] = Decimal('0')
+        ctx['dashboard_commandes_en_cours'] = 0
+        ctx['dashboard_caisse_ops'] = 0
         # KPI produits (articles) : compte réel en base, borné à l'entreprise active.
         # Superadmin sans entreprise active : compte global (lecture).
         try:
@@ -181,6 +190,43 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ctx['kpi_produits_count'] = 0
         except Exception:
             ctx['kpi_produits_count'] = 0
+
+        if eid is not None:
+            try:
+                from articles.currency import get_primary_currency_code, to_primary_amount
+                from caisse.models import MouvementCaisse
+                from caisse.services import cash_balances_by_caisse
+                from commandes.models import ClientSoldeMouvement, Commande
+                from ventes.models import Vente
+
+                eid_int = int(eid)
+                ctx['dashboard_currency'] = get_primary_currency_code(eid_int)
+                today = timezone.localdate()
+                total_ventes = Decimal('0')
+                ventes_jour = Decimal('0')
+                for vente in Vente.objects.filter(entreprise_id=eid_int).only('total', 'devise', 'date_vente'):
+                    amount = to_primary_amount(eid_int, vente.total, vente.devise)
+                    total_ventes += amount
+                    if vente.date_vente and vente.date_vente.date() == today:
+                        ventes_jour += amount
+                ctx['dashboard_total_ventes'] = total_ventes
+                ctx['dashboard_ventes_jour'] = ventes_jour
+                ctx['dashboard_total_caisse'] = sum(cash_balances_by_caisse(eid_int).values(), Decimal('0'))
+                ctx['dashboard_caisse_ops'] = MouvementCaisse.objects.filter(entreprise_id=eid_int).count()
+                ctx['dashboard_commandes_en_cours'] = Commande.objects.filter(
+                    entreprise_id=eid_int,
+                    statut__in=[Commande.Statut.EN_ATTENTE, Commande.Statut.RESERVEE],
+                ).count()
+
+                by_client: dict[str, Decimal] = {}
+                for mv in ClientSoldeMouvement.objects.filter(entreprise_id=eid_int).only('client_id', 'type', 'montant', 'devise'):
+                    signed = to_primary_amount(eid_int, mv.montant, mv.devise)
+                    if mv.type == ClientSoldeMouvement.Type.DEBIT:
+                        signed = -signed
+                    by_client[mv.client_id] = by_client.get(mv.client_id, Decimal('0')) + signed
+                ctx['dashboard_dettes_clients'] = sum((-v for v in by_client.values() if v < 0), Decimal('0'))
+            except Exception:
+                pass
 
         can_invite_client = (
             eid

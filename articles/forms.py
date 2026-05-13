@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django import forms
 
-from articles.models import Article, SousTypeArticle, TypeArticle, Unite
+from articles.models import Article, Devise, SousTypeArticle, TypeArticle, Unite
 
 
 class UniteForm(forms.ModelForm):
@@ -15,6 +15,31 @@ class UniteForm(forms.ModelForm):
             'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '32', 'autocomplete': 'off'}),
             'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '128', 'autocomplete': 'off'}),
         }
+
+
+class DeviseForm(forms.ModelForm):
+    class Meta:
+        model = Devise
+        fields = ('code', 'libelle', 'taux_vers_principale', 'principale', 'actif')
+        widgets = {
+            'code': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '10', 'autocomplete': 'off'}),
+            'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '64', 'autocomplete': 'off'}),
+            'taux_vers_principale': forms.NumberInput(
+                attrs={'class': 'art-input', 'min': '0.000001', 'step': '0.000001'},
+            ),
+        }
+
+    def clean_code(self):
+        code = (self.cleaned_data.get('code') or '').strip().upper()
+        if not code:
+            raise forms.ValidationError('Le code devise est requis.')
+        return code[:10]
+
+    def clean_taux_vers_principale(self):
+        taux = self.cleaned_data.get('taux_vers_principale')
+        if taux is None or taux <= 0:
+            raise forms.ValidationError('Le taux doit etre superieur a 0.')
+        return taux
 
 
 class TypeArticleForm(forms.ModelForm):

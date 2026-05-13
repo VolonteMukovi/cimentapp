@@ -7,13 +7,16 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Case, DecimalField, F, Value, When
 from django.db.models import Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
+from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
+from articles.models import Devise
 from caisse.models import MouvementCaisse
+from caisse.services import cash_balances_by_caisse
+from fournisseurs.models import Fournisseur
 from lots.models import DepenseLot, LotStock
 from lots.models import LotTransit, LotTransitArticle, LotTransitArticleFinancement, LotTransitFrais
 from lots.services import sync_lot_transit_closure
@@ -84,7 +87,48 @@ class LotStockListView(LotsAccessMixin, TemplateView):
         ctx['store_module_key'] = 'lots'
         ctx['store_module_title'] = 'Lots & Transit'
         ctx['MEDIA_URL'] = settings.MEDIA_URL
+        eid = self.entreprise_id()
+        ctx['devise_principale_code'] = get_primary_currency_code(eid)
+        ctx['devises'] = Devise.objects.filter(entreprise_id=eid, actif=True).order_by('-principale', 'code') if eid else []
         return ctx
+
+
+class LotsLookupsApiView(LotsAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'results': {'fournisseurs': [], 'devises': [], 'devise_principale': get_primary_currency_code(None)}})
+        fournisseurs = [
+            {'id': f.id, 'nom': f.nom, 'contact': f.contact}
+            for f in Fournisseur.objects.filter(entreprise_id=eid, statut=Fournisseur.Statut.ACTIF).order_by('nom')[:200]
+        ]
+        devises_qs = Devise.objects.filter(entreprise_id=eid, actif=True).order_by('-principale', 'code')
+        devises = [
+            {
+                'code': d.code,
+                'libelle': d.libelle,
+                'principale': d.principale,
+                'taux_vers_principale': str(d.taux_vers_principale),
+            }
+            for d in devises_qs
+        ]
+        if not devises:
+            devises = [{'code': get_primary_currency_code(eid), 'libelle': '', 'principale': True, 'taux_vers_principale': '1'}]
+        return JsonResponse(
+            {
+                'results': {
+                    'fournisseurs': fournisseurs,
+                    'devises': devises,
+                    'devise_principale': get_primary_currency_code(eid),
+                },
+                'count': len(fournisseurs) + len(devises),
+                'page': 1,
+                'page_size': 25,
+            },
+            status=200,
+        )
 
 
 class LotStockApiListView(LotsAccessMixin, View):
@@ -120,6 +164,7 @@ class LotStockApiListView(LotsAccessMixin, View):
                 'quantite_entree': str(r.quantite_entree),
                 'quantite_restante': str(r.quantite_restante),
                 'cout_unitaire_achat': str(r.cout_unitaire_achat),
+                'devise': r.devise,
                 'date_entree': r.date_entree.isoformat(),
             }
             for r in rows
@@ -156,6 +201,10 @@ class LotStockCreateApiView(LotsAccessMixin, View):
             cout = Decimal('0')
         if cout < 0:
             return JsonResponse({'ok': False, 'error': 'cout_unitaire_achat invalide.'}, status=400)
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
         reference = (payload.get('reference') or '').strip()[:255]
         dt_raw = payload.get('date_entree')
@@ -174,6 +223,7 @@ class LotStockCreateApiView(LotsAccessMixin, View):
             quantite_entree=qte,
             quantite_restante=qte,
             cout_unitaire_achat=cout,
+            devise=devise,
             date_entree=dt,
         )
         return JsonResponse({'ok': True, 'id': obj.id}, status=201)
@@ -206,6 +256,10 @@ class DepenseLotCreateApiView(LotsAccessMixin, View):
             montant = Decimal('0')
         if montant < 0:
             return JsonResponse({'ok': False, 'error': 'montant invalide.'}, status=400)
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise') or lot.devise)
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
         dt_raw = payload.get('date_depense')
         if dt_raw:
@@ -220,6 +274,7 @@ class DepenseLotCreateApiView(LotsAccessMixin, View):
             lot_id=lot.id,
             libelle=libelle,
             montant=montant,
+            devise=devise,
             date_depense=dt,
         )
         return JsonResponse({'ok': True, 'id': obj.id}, status=201)
@@ -344,9 +399,20 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
             payload = {}
 
         reference = str(payload.get('reference') or '').strip()[:64]
-        fournisseur = str(payload.get('fournisseur') or '').strip()[:150]
-        if not reference or not fournisseur:
-            return JsonResponse({'ok': False, 'error': 'reference et fournisseur sont requis.'}, status=400)
+        fournisseur_id = payload.get('fournisseur_id')
+        if not reference or not str(fournisseur_id).isdigit():
+            return JsonResponse({'ok': False, 'error': 'reference et fournisseur_id sont requis.'}, status=400)
+        fournisseur = Fournisseur.objects.filter(
+            entreprise_id=eid,
+            id=int(fournisseur_id),
+            statut=Fournisseur.Statut.ACTIF,
+        ).first()
+        if not fournisseur:
+            return JsonResponse({'ok': False, 'error': 'Fournisseur introuvable ou inactif.'}, status=400)
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
         date_expedition = _parse_dt(str(payload.get('date_expedition') or ''))
         date_arrivee = _parse_dt(str(payload.get('date_arrivee_prevue') or ''))
         if not date_expedition or not date_arrivee:
@@ -357,19 +423,8 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
         if not isinstance(articles, list) or not articles:
             return JsonResponse({'ok': False, 'error': 'Au moins un article est requis.'}, status=400)
 
-        # Solde disponible par sous-compte caisse
-        signed = Case(
-            When(type=MouvementCaisse.Type.ENTREE, then=F('montant')),
-            When(type=MouvementCaisse.Type.SORTIE, then=F('montant') * Value(Decimal('-1'))),
-            default=Value(Decimal('0')),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        )
-        current_balances = {
-            int(r['caisse_id']): (_d(r['solde']))
-            for r in MouvementCaisse.objects.filter(entreprise_id=eid)
-            .values('caisse_id')
-            .annotate(solde=Sum(signed))
-        }
+        # Solde disponible par sous-compte caisse, converti en devise principale.
+        current_balances = cash_balances_by_caisse(eid)
         planned_debits: dict[int, Decimal] = {}
         normalized_articles = []
         total_articles = Decimal('0')
@@ -396,7 +451,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                 caisse_id = int(caisse_id)
                 total_fin += mnt
                 fin_rows.append({'caisse_id': caisse_id, 'montant': mnt})
-                planned_debits[caisse_id] = planned_debits.get(caisse_id, Decimal('0')) + mnt
+                planned_debits[caisse_id] = planned_debits.get(caisse_id, Decimal('0')) + to_primary_amount(eid, mnt, devise)
             if total_fin != montant:
                 return JsonResponse(
                     {
@@ -423,7 +478,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
             caisse_id = int(caisse_id)
             normalized_frais.append({'libelle': libelle, 'montant': montant, 'caisse_id': caisse_id})
             total_frais += montant
-            planned_debits[caisse_id] = planned_debits.get(caisse_id, Decimal('0')) + montant
+            planned_debits[caisse_id] = planned_debits.get(caisse_id, Decimal('0')) + to_primary_amount(eid, montant, devise)
 
         # Vérification de fonds disponibles (avec agrégat des débits planifiés)
         insufficient = []
@@ -440,7 +495,9 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
         lot = LotTransit.objects.create(
             entreprise_id=eid,
             reference=reference,
-            fournisseur=fournisseur,
+            fournisseur_id=fournisseur.id,
+            fournisseur=fournisseur.nom,
+            devise=devise,
             date_expedition=date_expedition.date(),
             date_arrivee_prevue=date_arrivee.date(),
             statut=LotTransit.Statut.EN_TRANSIT,
@@ -457,6 +514,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                 quantite_entree=ar['quantite'],
                 quantite_restante=ar['quantite'],
                 cout_unitaire_achat=ar['pu'],
+                devise=devise,
                 date_entree=timezone.now(),
             )
             line = LotTransitArticle.objects.create(
@@ -476,6 +534,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                     caisse_id=fin['caisse_id'],
                     type=MouvementCaisse.Type.SORTIE,
                     montant=fin['montant'],
+                    devise=devise,
                     date_mouvement=timezone.now(),
                     libelle=f'Approvisionnement lot {reference} - article {ar["article_id"]}',
                     source_type='lot_article',
@@ -494,6 +553,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                 caisse_id=fr['caisse_id'],
                 type=MouvementCaisse.Type.SORTIE,
                 montant=fr['montant'],
+                devise=devise,
                 date_mouvement=timezone.now(),
                 libelle=f'Frais lot {reference} - {fee.libelle}',
                 source_type='lot_frais',
@@ -514,6 +574,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                     lot_id=line.lot_stock_id,
                     libelle=f'Frais répartis lot {reference}',
                     montant=allocated,
+                    devise=devise,
                     date_depense=timezone.now(),
                 )
 
@@ -533,6 +594,8 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                 'cout_frais': str(total_frais),
                 'cout_total_lot': str(cout_total_lot),
                 'frais_unitaire_reparti': str(frais_per_unit),
+                'devise': devise,
+                'devise_principale': get_primary_currency_code(eid),
             },
             status=201,
         )
@@ -560,7 +623,9 @@ class LotTransitApiListView(LotsAccessMixin, View):
                 {
                     'id': lot.id,
                     'reference': lot.reference,
+                    'fournisseur_id': lot.fournisseur_id,
                     'fournisseur': lot.fournisseur,
+                    'devise': lot.devise,
                     'date_expedition': lot.date_expedition.isoformat(),
                     'date_arrivee_prevue': lot.date_arrivee_prevue.isoformat(),
                     'statut': lot.statut,

@@ -5,6 +5,7 @@ from lots import views
 
 urlpatterns = [
     path('', views.LotStockListView.as_view(), name='store_lots'),
+    path('api/lookups/', views.LotsLookupsApiView.as_view(), name='api_lots_lookups'),
     path('api/lots-transit/', views.LotTransitApiListView.as_view(), name='api_lots_transit_list'),
     path('api/lots-transit/creer/', views.LotTransitCreateApiView.as_view(), name='api_lots_transit_create'),
     path('api/lots-transit/<int:lot_id>/statut/', views.LotTransitStatusUpdateApiView.as_view(), name='api_lots_transit_status'),

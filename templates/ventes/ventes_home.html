@@ -4,19 +4,23 @@
 {% block content %}
   <section class="app-surface-card overflow-hidden p-6 sm:p-7">
     <h1 class="text-2xl font-bold tracking-tight text-black">Ventes</h1>
-    <p class="mt-1 text-sm text-slate-600">Vente directe (client occasionnel possible), prix unitaire libre, sortie stock FIFO et encaissement en caisse.</p>
+    <p class="mt-1 text-sm text-slate-600">Vente directe avec client existant, prix unitaire libre, sortie stock FIFO et encaissement en caisse.</p>
 
     <div class="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Nouvelle vente</p>
       <form id="vente-form" class="mt-3 grid gap-2">
         <div class="grid gap-2 sm:grid-cols-2">
-          <input name="client_nom" placeholder="Nom client (optionnel)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <select name="client_id" id="client-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+            <option value="">â€” Choisir un client â€”</option>
+          </select>
           <select name="caisse_id" id="caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
             <option value="">— Choisir une caisse —</option>
           </select>
         </div>
         <div class="grid gap-2 sm:grid-cols-2">
-          <input name="devise" value="USD" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <select name="devise" id="devise-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+            <option value="{{ devise_principale_code }}">{{ devise_principale_code }}</option>
+          </select>
           <input name="date_vente" placeholder="Date ISO (optionnel)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
         </div>
 
@@ -73,6 +77,7 @@
   var linesEl = document.getElementById('lines');
   var caChart = null;
   var articlesCache = [];
+  var primaryCurrency = '{{ devise_principale_code|escapejs }}';
 
   function addLine(defaults) {
     var row = document.createElement('div');
@@ -129,10 +134,12 @@
   function bootLookups() {
     return Promise.all([
       fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
-      fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
+      fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
+      fetch('/magasin/ventes/api/lookups/', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
     ]).then(function(res){
       var caisses = res[0];
       var articles = res[1];
+      var lookups = (res[2].results || {});
       var caisseSel = document.getElementById('caisse-select');
       (caisses.results || []).forEach(function(c){
         var opt = document.createElement('option');
@@ -140,6 +147,23 @@
         opt.textContent = c.nom + ' (#' + c.id + ')';
         caisseSel.appendChild(opt);
       });
+      var clientSel = document.getElementById('client-select');
+      (lookups.clients || []).forEach(function(c){
+        var opt = document.createElement('option');
+        opt.value = c.client_id;
+        opt.textContent = c.nom + (c.email ? (' - ' + c.email) : '') + ' (' + c.client_id + ')';
+        clientSel.appendChild(opt);
+      });
+      var deviseSel = document.getElementById('devise-select');
+      deviseSel.innerHTML = '';
+      (lookups.devises || [{ code: primaryCurrency, principale: true }]).forEach(function(d){
+        var opt = document.createElement('option');
+        opt.value = d.code;
+        opt.textContent = d.code + (d.principale ? ' (principale)' : '');
+        deviseSel.appendChild(opt);
+      });
+      primaryCurrency = lookups.devise_principale || primaryCurrency;
+      deviseSel.value = primaryCurrency;
       articlesCache = (articles.results || []).map(function(a){
         return { article_id: a.article_id, nom: a.nom, prix_catalogue: a.prix_catalogue };
       });
@@ -163,8 +187,8 @@
           var tr = document.createElement('tr');
           tr.innerHTML =
             '<td class="py-2 pr-4 font-mono text-xs font-semibold text-black">' + r.vente_id + '</td>' +
-            '<td class="py-2 pr-4">' + (r.client_nom || '—') + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.total + ' ' + r.devise + '</td>' +
+            '<td class="py-2 pr-4">' + (r.client_label || r.client_nom || r.client_id || '—') + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + (r.total_principal || r.total) + ' ' + (r.devise_principale || r.devise) + '</td>' +
             '<td class="py-2 pr-4">#' + (r.caisse_id || '—') + '</td>' +
             '<td class="py-2 pr-4 text-slate-600">' + (r.date_vente || '').slice(0, 19).replace('T',' ') + '</td>';
           tb.appendChild(tr);
@@ -211,7 +235,7 @@
       lignes.push({ article_id: article, quantite: qte, prix_unitaire_vente: prix });
     });
     var payload = {
-      client_nom: form.client_nom.value,
+      client_id: form.client_id.value,
       caisse_id: form.caisse_id.value,
       devise: form.devise.value,
       date_vente: form.date_vente.value,
@@ -230,7 +254,7 @@
         }
         msg.textContent = 'Vente enregistrée: ' + res.json.vente_id + ' (total ' + res.json.total + ').';
         form.reset();
-        form.devise.value = 'USD';
+        form.devise.value = primaryCurrency;
         linesEl.innerHTML = '';
         addLine();
         fetchVentes();

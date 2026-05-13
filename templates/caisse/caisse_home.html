@@ -51,6 +51,7 @@
               <tr>
                 <th class="py-2 pr-4">Caisse</th>
                 <th class="py-2 pr-4">Solde</th>
+                <th class="py-2 pr-4 text-right">Historique</th>
               </tr>
             </thead>
             <tbody id="caisse-tbody" class="divide-y divide-slate-100"></tbody>
@@ -58,6 +59,24 @@
         </div>
         <div class="mt-3 text-xs text-slate-600" id="caisse-pager">—</div>
       </div>
+    </div>
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">10 dernieres transactions</p>
+      <p id="caisse-history-title" class="mt-1 text-sm font-semibold text-black">Selectionnez une caisse</p>
+      <div id="caisse-history-list" class="mt-3 space-y-2"></div>
+    </div>
+
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Decaissement</p>
+      <form id="caisse-sortie-form" class="mt-2 grid gap-2">
+        <select name="caisse_id" id="sortie-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <option value="">— Sous-compte concerne —</option>
+        </select>
+        <input name="montant" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="Montant" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <input name="motif" maxlength="255" placeholder="Motif du decaissement" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <button class="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 hover:border-black" type="submit">Enregistrer la sortie</button>
+        <p id="caisse-sortie-msg" class="text-xs text-slate-600"></p>
+      </form>
     </div>
   </section>
 {% endblock %}
@@ -69,25 +88,90 @@
   var page = 1;
   var pageSize = 25;
   var donut = null;
+  var selectedCaisseId = null;
+  var caissesCache = [];
+
+  function money(v, code) {
+    return (v || '0.00') + (code ? (' ' + code) : '');
+  }
+
+  function escapeHtml(v) {
+    return String(v || '').replace(/[&<>"']/g, function(ch){
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function fetchRecent(caisseId, caisseName) {
+    if (!caisseId) return Promise.resolve();
+    selectedCaisseId = caisseId;
+    var title = document.getElementById('caisse-history-title');
+    var list = document.getElementById('caisse-history-list');
+    title.textContent = caisseName || ('Caisse #' + caisseId);
+    list.innerHTML = '<p class="text-sm text-slate-500">Chargement...</p>';
+    return fetch('/magasin/caisse/api/caisses/' + encodeURIComponent(caisseId) + '/mouvements-recents/', { headers: { 'Accept': 'application/json' }})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        var primary = data.devise_principale || '';
+        list.innerHTML = '';
+        if (!(data.results || []).length) {
+          list.innerHTML = '<p class="text-sm text-slate-500">Aucune transaction recente.</p>';
+          return;
+        }
+        (data.results || []).forEach(function(m){
+          var card = document.createElement('div');
+          var tone = m.type === 'sortie' ? 'text-red-700 bg-red-50 border-red-100' : 'text-emerald-700 bg-emerald-50 border-emerald-100';
+          card.className = 'rounded-xl border border-slate-100 bg-slate-50 px-3 py-2';
+          card.innerHTML =
+            '<div class="flex items-center justify-between gap-2">' +
+            '<p class="min-w-0 truncate text-sm font-semibold text-black">' + escapeHtml(m.libelle || m.source_type || 'Mouvement') + '</p>' +
+            '<span class="shrink-0 rounded-full border px-2 py-1 text-[11px] font-semibold ' + tone + '">' + m.type + '</span>' +
+            '</div>' +
+            '<div class="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">' +
+            '<span>' + (m.date_mouvement || '').slice(0,19).replace("T"," ") + '</span>' +
+            '<span class="font-semibold tabular-nums text-black">' + money(m.montant_principal, primary) + '</span>' +
+            '</div>' +
+            '<p class="mt-1 text-[11px] text-slate-500">Original: ' + money(m.montant, m.devise) + '</p>';
+          list.appendChild(card);
+        });
+      })
+      .catch(function(){ list.innerHTML = '<p class="text-sm text-red-700">Erreur de chargement.</p>'; });
+  }
 
   function fetchSolde() {
     return fetch('/magasin/caisse/api/stats/', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
       .then(function(data){
-        document.getElementById('caisse-total').textContent = (data.stats && data.stats.total) ? data.stats.total : '0.00';
+        var primary = (data.stats && data.stats.devise_principale) ? data.stats.devise_principale : '';
+        document.getElementById('caisse-total').textContent = money((data.stats && data.stats.total) ? data.stats.total : '0.00', primary);
         var tb = document.getElementById('caisse-tbody');
         tb.innerHTML = '';
         var labels = [];
         var values = [];
+        var first = null;
+        caissesCache = data.results || [];
+        refreshSortieCaisses();
         (data.results || []).forEach(function (r) {
           var tr = document.createElement('tr');
+          if (!first) first = r;
           tr.innerHTML =
-            '<td class="py-2 pr-4 font-semibold text-black">' + (r.nom || ('Caisse #' + r.caisse_id)) + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + (r.solde || '0.00') + '</td>';
+            '<td class="py-2 pr-4 font-semibold text-black">' + escapeHtml(r.nom || ('Caisse #' + r.caisse_id)) + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + money(r.solde || '0.00', primary) + '</td>' +
+            '<td class="py-2 pr-4 text-right"><button type="button" class="history-btn rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-black" data-id="' + r.caisse_id + '" data-name="' + escapeHtml(r.nom || ('Caisse #' + r.caisse_id)) + '">Voir</button></td>';
           tb.appendChild(tr);
           labels.push(r.nom || ('#' + r.caisse_id));
           values.push(parseFloat(r.solde || '0') || 0);
         });
+        tb.querySelectorAll('.history-btn').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            fetchRecent(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+          });
+        });
+        if (!selectedCaisseId && first) {
+          fetchRecent(first.caisse_id, first.nom || ('Caisse #' + first.caisse_id));
+        } else if (selectedCaisseId) {
+          var active = (data.results || []).filter(function(r){ return String(r.caisse_id) === String(selectedCaisseId); })[0];
+          if (active) fetchRecent(active.caisse_id, active.nom || ('Caisse #' + active.caisse_id));
+        }
         document.getElementById('caisse-pager').textContent = (data.results || []).length + ' caisses (stats)';
 
         var canvas = document.getElementById('caisse-chart');
@@ -119,6 +203,20 @@
       });
   }
 
+  function refreshSortieCaisses() {
+    var sel = document.getElementById('sortie-caisse-select');
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="">— Sous-compte concerne —</option>';
+    caissesCache.forEach(function(c){
+      var opt = document.createElement('option');
+      opt.value = c.caisse_id;
+      opt.textContent = c.nom || ('Caisse #' + c.caisse_id);
+      sel.appendChild(opt);
+    });
+    sel.value = current;
+  }
+
   document.getElementById('caisse-refresh').addEventListener('click', function (e) {
     e.preventDefault();
     fetchSolde();
@@ -144,6 +242,26 @@
         fetchSolde();
       })
       .catch(function(){ msg.textContent = 'Erreur réseau.'; });
+  });
+
+  document.getElementById('caisse-sortie-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.target;
+    var msg = document.getElementById('caisse-sortie-msg');
+    msg.textContent = 'Enregistrement...';
+    fetch('/magasin/caisse/api/sortie/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+      body: JSON.stringify({ caisse_id: form.caisse_id.value, montant: form.montant.value, motif: form.motif.value })
+    })
+      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
+      .then(function(res){
+        if (!res.ok || !res.json.ok) { msg.textContent = res.json.error || 'Erreur.'; return; }
+        msg.textContent = 'Sortie enregistree.';
+        form.reset();
+        fetchSolde();
+      })
+      .catch(function(){ msg.textContent = 'Erreur reseau.'; });
   });
 
   fetchSolde();

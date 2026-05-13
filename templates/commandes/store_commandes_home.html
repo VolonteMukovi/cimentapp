@@ -46,7 +46,8 @@
 
   function promptDepot(cmd) {
     var caisseLabel = (cmd.caisse_id ? ('#' + cmd.caisse_id) : '');
-    var montant = prompt('Montant dépôt (USD)', cmd.total || '0.00');
+    var devise = cmd.devise || cmd.devise_principale || '';
+    var montant = prompt('Montant dépôt' + (devise ? (' (' + devise + ')') : ''), cmd.total || '0.00');
     if (!montant) return Promise.resolve();
     var caisseId = cmd.caisse_id;
     if (!caisseId) {
@@ -63,13 +64,24 @@
   }
 
   function creerVente(cmd) {
+    var lignes = [];
+    (cmd.lignes || []).forEach(function(line){
+      var qteText = 'Quantite livree pour ' + line.article_id + '\nCommandee: ' + line.quantite + '\nVous pouvez livrer plus que la commande.';
+      var quantite = prompt(qteText, line.quantite);
+      if (quantite === null) return;
+      var prix = prompt('Prix de vente unitaire pour ' + line.article_id, line.prix_unitaire && line.prix_unitaire !== '0.00' ? line.prix_unitaire : '');
+      if (prix === null) return;
+      lignes.push({ id: line.id, quantite: quantite, prix_unitaire: prix });
+    });
+    if ((cmd.lignes || []).length && lignes.length !== (cmd.lignes || []).length) return Promise.resolve();
     return fetch('/magasin/commandes/api/commandes/' + encodeURIComponent(cmd.commande_id) + '/creer-vente/', {
       method: 'POST',
-      headers: { 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') }
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+      body: JSON.stringify({ lignes: lignes })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
       .then(function(res){
         if (!res.ok || !res.json.ok) { alert(res.json.error || 'Erreur'); return; }
-        alert('Vente créée: ' + res.json.vente_id + ' (' + res.json.type_vente + ')');
+        alert('Vente creee: ' + res.json.vente_id + ' (' + res.json.type_vente + ')\nSolde client apres: ' + res.json.solde_client_apres + ' ' + res.json.devise_principale);
       });
   }
 
@@ -83,17 +95,26 @@
           var pay = r.paiement_statut || 'aucun';
           var btnDepot = '<button data-action="depot" class="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-slate-300">Confirmer dépôt</button>';
           var btnVente = '<button data-action="vente" class="rounded-xl bg-black px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">Créer vente</button>';
+          if (r.statut === 'livree') {
+            btnDepot = '<span class="text-xs font-semibold text-slate-500">Depot traite</span>';
+            btnVente = '<span class="text-xs font-semibold text-slate-500">Livree</span>';
+          } else if (r.statut !== 'reservee') {
+            btnVente = '<span class="text-xs font-semibold text-slate-500">En attente de reservation</span>';
+          }
           var tr = document.createElement('tr');
           tr.innerHTML =
             '<td class="py-2 pr-4 font-mono text-xs font-semibold text-black">' + r.commande_id + '</td>' +
-            '<td class="py-2 pr-4">' + (r.client_id || '—') + '</td>' +
+            '<td class="py-2 pr-4">' + (r.client_id || '—') + '<p class="text-[11px] text-slate-500">Garantie: ' + (r.solde_client_principal || '0.00') + ' ' + (r.devise_principale || '') + '</p></td>' +
             '<td class="py-2 pr-4">' + r.statut + '</td>' +
             '<td class="py-2 pr-4">' + pay + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.total + ' ' + r.devise + '</td>' +
+            '<td class="py-2 pr-4 tabular-nums font-semibold">' + (r.total_principal || r.total || '0.00') + ' ' + (r.devise_principale || r.devise) + '</td>' +
             '<td class="py-2 pr-4 text-slate-600">' + (r.date_commande || '').slice(0, 19).replace('T',' ') + '</td>' +
             '<td class="py-2 pr-4 text-right space-x-2">' + btnDepot + btnVente + '</td>';
-          tr.querySelector('[data-action="depot"]').addEventListener('click', function(){ promptDepot(r).then(fetchCmd); });
-          tr.querySelector('[data-action="vente"]').addEventListener('click', function(){ creerVente(r).then(fetchCmd); });
+          tr.title = 'Garantie client: ' + (r.solde_client_principal || '0.00') + ' ' + (r.devise_principale || '');
+          var depotAction = tr.querySelector('[data-action="depot"]');
+          var venteAction = tr.querySelector('[data-action="vente"]');
+          if (depotAction) depotAction.addEventListener('click', function(){ promptDepot(r).then(fetchCmd); });
+          if (venteAction) venteAction.addEventListener('click', function(){ creerVente(r).then(fetchCmd); });
           tb.appendChild(tr);
         });
         document.getElementById('cmd-pager').textContent =

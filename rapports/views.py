@@ -5,12 +5,11 @@ from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import F, Sum
-from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
-from caisse.models import MouvementCaisse
+from articles.currency import get_primary_currency_code, to_primary_amount
 from lots.models import DepenseLot, LotStock
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
@@ -90,7 +89,8 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
                 ventes = ventes.filter(date_vente__lte=datetime.fromisoformat(dt_to))
             except Exception:
                 pass
-        vente_ids = list(ventes.values_list('vente_id', flat=True))
+        vente_currency_map = {v.vente_id: v.devise for v in ventes.only('vente_id', 'devise')}
+        vente_ids = list(vente_currency_map.keys())
         if not vente_ids:
             return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
 
@@ -117,6 +117,7 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
                 'lot_id',
                 'vente_ligne_id',
                 'quantite',
+                'vente_id',
             )
         )
         line_ids = [x['vente_ligne_id'] for x in cons_detail]
@@ -129,7 +130,11 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
             lot_id = int(row['lot_id'])
             qte = row['quantite'] or Decimal('0')
             prix = line_prices.get(int(row['vente_ligne_id']), Decimal('0'))
-            ca_by_lot[lot_id] = ca_by_lot.get(lot_id, Decimal('0')) + (qte * prix)
+            ca_by_lot[lot_id] = ca_by_lot.get(lot_id, Decimal('0')) + to_primary_amount(
+                eid,
+                qte * prix,
+                vente_currency_map.get(row['vente_id']),
+            )
 
         # dépenses totales par lot (info)
         exp = (
@@ -158,7 +163,16 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
                 }
             )
 
-        return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
+        return JsonResponse(
+            {
+                'results': results,
+                'count': count,
+                'page': page,
+                'page_size': page_size,
+                'devise_principale': get_primary_currency_code(eid),
+            },
+            status=200,
+        )
 
 
 class RapportsStatsApiView(RapportsAccessMixin, View):
@@ -180,7 +194,7 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
                     'count': 0,
                     'page': 1,
                     'page_size': 25,
-                    'stats': {'total_ca': '0.00', 'total_cogs': '0.00', 'total_benef': '0.00'},
+                    'stats': {'total_ca': '0.00', 'total_cogs': '0.00', 'total_benef': '0.00', 'devise_principale': get_primary_currency_code(None)},
                 },
                 status=200,
             )
@@ -199,7 +213,8 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
             except Exception:
                 pass
 
-        vente_map = {v.vente_id: v.date_vente.date() for v in ventes.only('vente_id', 'date_vente')}
+        vente_rows = list(ventes.only('vente_id', 'date_vente', 'total', 'devise'))
+        vente_map = {v.vente_id: v.date_vente.date() for v in vente_rows}
         if not vente_map:
             return JsonResponse(
                 {
@@ -207,19 +222,17 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
                     'count': 0,
                     'page': 1,
                     'page_size': 25,
-                    'stats': {'total_ca': '0.00', 'total_cogs': '0.00', 'total_benef': '0.00'},
+                    'stats': {'total_ca': '0.00', 'total_cogs': '0.00', 'total_benef': '0.00', 'devise_principale': get_primary_currency_code(eid)},
                 },
                 status=200,
             )
 
-        # CA par jour (SQL)
-        ca_daily = (
-            ventes.annotate(day=TruncDate('date_vente'))
-            .values('day')
-            .annotate(ca=Sum('total'))
-            .order_by('day')
-        )
-        ca_by_day = {r['day']: (r['ca'] or Decimal('0')) for r in ca_daily}
+        ca_by_day: dict = {}
+        for vente in vente_rows:
+            day = vente.date_vente.date() if vente.date_vente else None
+            if not day:
+                continue
+            ca_by_day[day] = ca_by_day.get(day, Decimal('0')) + to_primary_amount(eid, vente.total, vente.devise)
 
         # COGS par vente (SQL), puis regroupement par jour en Python
         cogs_rows = (
@@ -263,7 +276,12 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
                 'count': len(results),
                 'page': 1,
                 'page_size': 25,
-                'stats': {'total_ca': str(total_ca), 'total_cogs': str(total_cogs), 'total_benef': str(total_ca - total_cogs)},
+                'stats': {
+                    'total_ca': str(total_ca),
+                    'total_cogs': str(total_cogs),
+                    'total_benef': str(total_ca - total_cogs),
+                    'devise_principale': get_primary_currency_code(eid),
+                },
             },
             status=200,
         )

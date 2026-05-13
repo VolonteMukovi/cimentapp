@@ -158,7 +158,7 @@ STORE_MODULE_KEYS = frozenset(
 
 STORE_MODULE_LABELS = {
     'articles': 'Articles',
-    'articles_settings': 'Paramètres articles',
+    'articles_settings': 'Paramètres',
     'lots': 'Lots produits',
     'caisse': 'Caisse & sous-comptes',
     'ventes': 'Ventes',

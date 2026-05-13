@@ -17,7 +17,12 @@
     <h2 class="text-base font-bold text-black">Nouveau lot transit</h2>
     <div class="mt-3 grid gap-2 sm:grid-cols-2">
       <input id="lot-reference" placeholder="Référence (ex: LOT_2026_001)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-      <input id="lot-fournisseur" placeholder="Fournisseur" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+      <select id="lot-fournisseur" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+        <option value="">â€” Choisir un fournisseur â€”</option>
+      </select>
+      <select id="lot-devise" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+        <option value="{{ devise_principale_code }}">{{ devise_principale_code }}</option>
+      </select>
       <input id="lot-date-expedition" type="date" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
       <input id="lot-date-arrivee" type="date" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
     </div>
@@ -55,6 +60,8 @@
 (function(){
   var articlesOptions = [];
   var caissesOptions = [];
+  var fournisseursOptions = [];
+  var primaryCurrency = '{{ devise_principale_code|escapejs }}';
 
   function num(v){ var n = parseFloat(String(v||'').replace(',', '.')); return isNaN(n) ? 0 : n; }
   function qs(params){ return Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&'); }
@@ -72,6 +79,12 @@
       sel.innerHTML = optionHtml(caissesOptions, 'Sous-compte');
       sel.value = v;
     });
+    var fournisseurSel = document.getElementById('lot-fournisseur');
+    if (fournisseurSel) {
+      var fv = fournisseurSel.value;
+      fournisseurSel.innerHTML = optionHtml(fournisseursOptions, 'Fournisseur');
+      fournisseurSel.value = fv;
+    }
   }
   function recalcTotals(){
     var sA = 0;
@@ -142,7 +155,8 @@
     });
     return {
       reference: document.getElementById('lot-reference').value,
-      fournisseur: document.getElementById('lot-fournisseur').value,
+      fournisseur_id: document.getElementById('lot-fournisseur').value,
+      devise: document.getElementById('lot-devise').value,
       date_expedition: document.getElementById('lot-date-expedition').value,
       date_arrivee_prevue: document.getElementById('lot-date-arrivee').value,
       articles: articles,
@@ -175,7 +189,7 @@
             '<option value="cloture" '+(lot.statut==='cloture'?'selected':'')+' disabled>Clôturé</option>'+
             '</select></div>'+
             '<p class="text-xs text-slate-600 mt-1">'+lot.fournisseur+' — exp: '+lot.date_expedition+' — arr: '+lot.date_arrivee_prevue+'</p>'+
-            '<p class="text-xs font-semibold text-slate-700 mt-1">Coût total: '+lot.cout_total_lot+'</p>';
+            '<p class="text-xs font-semibold text-slate-700 mt-1">Coût total: '+lot.cout_total_lot+' '+(lot.devise || primaryCurrency)+'</p>';
           wrap.appendChild(card);
         });
         wrap.querySelectorAll('.lot-status').forEach(function(sel){
@@ -202,7 +216,7 @@
     }).then(function(r){ return r.json().then(function(j){ return {ok:r.ok,json:j}; }); })
       .then(function(res){
         if (!res.ok || !res.json.ok){ msg.textContent = res.json.error || 'Erreur de validation'; return; }
-        msg.textContent = 'Lot '+res.json.reference+' enregistré. Coût total: '+res.json.cout_total_lot;
+        msg.textContent = 'Lot '+res.json.reference+' enregistré. Coût total: '+res.json.cout_total_lot+' '+(res.json.devise || primaryCurrency);
         document.getElementById('article-rows').innerHTML = '';
         document.getElementById('fee-rows').innerHTML = '';
         addArticleRow();
@@ -221,6 +235,24 @@
   fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }})
     .then(function(r){ return r.json(); }).then(function(data){
       caissesOptions = (data.results||[]).map(function(c){ return { id: c.id, label: c.nom+' (#'+c.id+')' }; });
+      refreshDynamicSelects();
+    });
+  fetch('/magasin/lots/api/lookups/', { headers: { 'Accept': 'application/json' }})
+    .then(function(r){ return r.json(); }).then(function(data){
+      var lookups = data.results || {};
+      fournisseursOptions = (lookups.fournisseurs||[]).map(function(f){ return { id: f.id, label: f.nom+' (#'+f.id+')' }; });
+      var deviseSel = document.getElementById('lot-devise');
+      if (deviseSel) {
+        deviseSel.innerHTML = '';
+        (lookups.devises || [{ code: primaryCurrency, principale: true }]).forEach(function(d){
+          var opt = document.createElement('option');
+          opt.value = d.code;
+          opt.textContent = d.code + (d.principale ? ' (principale)' : '');
+          deviseSel.appendChild(opt);
+        });
+        primaryCurrency = lookups.devise_principale || primaryCurrency;
+        deviseSel.value = primaryCurrency;
+      }
       refreshDynamicSelects();
     });
   fetchLots();

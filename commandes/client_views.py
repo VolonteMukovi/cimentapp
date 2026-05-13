@@ -5,17 +5,15 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Sum
-from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.generic import ListView, View
 
+from articles.currency import get_primary_currency_code, to_primary_amount
 from articles.models import Article
 from caisse.models import CaisseCompte
-from commandes.models import Commande, CommandeLigne
-from commandes.models import ClientSoldeMouvement
+from commandes.models import ClientDettePaiement, ClientSoldeMouvement, Commande, CommandeLigne
 from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
 from users.models import Client
 
@@ -76,8 +74,6 @@ class ClientOrderCreateView(ClientPortalRequiredMixin, View):
             messages.error(request, 'Quantité invalide.')
             return redirect('client_catalogue')
 
-        prix = art.prix_catalogue or Decimal('0')
-        total_ligne = (qte * prix).quantize(Decimal('0.01'))
         caisse_id = int(caisse_id_raw) if caisse_id_raw.isdigit() else None
 
         with transaction.atomic():
@@ -85,11 +81,12 @@ class ClientOrderCreateView(ClientPortalRequiredMixin, View):
                 commande_id=Commande.generate_id(),
                 entreprise_id=self.entreprise_id,
                 client_id=str(self.client.pk),
-                statut=Commande.Statut.RESERVEE,
-                devise='USD',
-                total=total_ligne,
+                statut=Commande.Statut.EN_ATTENTE,
+                devise=get_primary_currency_code(self.entreprise_id),
+                total=Decimal('0'),
                 caisse_id=caisse_id,
                 note_client=note,
+                paiement_statut=Commande.PaiementStatut.EN_ATTENTE if (caisse_id or preuve) else Commande.PaiementStatut.AUCUN,
                 date_commande=timezone.now(),
             )
             if preuve:
@@ -99,8 +96,8 @@ class ClientOrderCreateView(ClientPortalRequiredMixin, View):
                 commande_id=cmd.commande_id,
                 article_id=art.article_id,
                 quantite=qte,
-                prix_unitaire=prix,
-                total_ligne=total_ligne,
+                prix_unitaire=Decimal('0'),
+                total_ligne=Decimal('0'),
             )
 
         messages.success(request, 'Commande enregistrée.')
@@ -134,16 +131,16 @@ class ClientOrdersStatsApiView(ClientPortalRequiredMixin, View):
             except Exception:
                 pass
 
-        daily = qs.annotate(day=TruncDate('date_commande')).values('day').annotate(total=Sum('total')).order_by('day')
-        rows = list(daily)
-        results = [
-            {
-                'day': (r['day'].isoformat() if r['day'] else None),
-                'total': str(r['total'] or Decimal('0')),
-            }
-            for r in rows
-        ]
-        total = qs.aggregate(total=Sum('total')).get('total') or Decimal('0')
+        by_day = {}
+        total = Decimal('0')
+        for cmd in qs.only('date_commande', 'total', 'devise'):
+            day = cmd.date_commande.date().isoformat() if cmd.date_commande else None
+            if not day:
+                continue
+            amount = to_primary_amount(self.entreprise_id, cmd.total, cmd.devise)
+            by_day[day] = by_day.get(day, Decimal('0')) + amount
+            total += amount
+        results = [{'day': day, 'total': str(amount)} for day, amount in sorted(by_day.items(), key=lambda item: item[0])]
         count_cmd = qs.count()
         return JsonResponse(
             {
@@ -151,10 +148,74 @@ class ClientOrdersStatsApiView(ClientPortalRequiredMixin, View):
                 'count': len(results),
                 'page': 1,
                 'page_size': 25,
-                'stats': {'total': str(total), 'commandes': count_cmd},
+                'stats': {'total': str(total), 'commandes': count_cmd, 'devise_principale': get_primary_currency_code(self.entreprise_id)},
             },
             status=200,
         )
+
+
+class ClientDettePaiementCreateView(ClientPortalRequiredMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, *args, **kwargs):
+        caisse_id_raw = (request.POST.get('caisse_id') or '').strip()
+        montant_raw = (request.POST.get('montant') or '').strip()
+        note = (request.POST.get('note_client') or '').strip()[:500]
+        preuve = request.FILES.get('preuve_paiement')
+
+        if not caisse_id_raw.isdigit():
+            messages.error(request, 'Veuillez choisir un sous-compte caisse.')
+            return redirect('client_wallet')
+        caisse_id = int(caisse_id_raw)
+        if not CaisseCompte.objects.filter(entreprise_id=self.entreprise_id, actif=True, pk=caisse_id).exists():
+            messages.error(request, 'Sous-compte caisse invalide.')
+            return redirect('client_wallet')
+        try:
+            montant = Decimal(montant_raw)
+        except Exception:
+            montant = Decimal('0')
+        if montant <= 0:
+            messages.error(request, 'Montant invalide.')
+            return redirect('client_wallet')
+        if not preuve:
+            messages.error(request, 'Veuillez joindre une preuve de paiement.')
+            return redirect('client_wallet')
+
+        ClientDettePaiement.objects.create(
+            entreprise_id=self.entreprise_id,
+            client_id=str(self.client.pk),
+            caisse_id=caisse_id,
+            montant=montant,
+            devise=get_primary_currency_code(self.entreprise_id),
+            preuve_paiement=preuve,
+            note_client=note,
+            date_soumission=timezone.now(),
+        )
+        messages.success(request, 'Paiement transmis. Il sera pris en compte apres confirmation.')
+        return redirect('client_wallet')
+
+
+class ClientDettePaiementsApiView(ClientPortalRequiredMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        qs = ClientDettePaiement.objects.filter(
+            entreprise_id=self.entreprise_id,
+            client_id=str(self.client.pk),
+        ).order_by('-date_soumission', '-id')
+        rows, count, page, page_size = _paginate(qs, request, default_page_size=10)
+        results = [
+            {
+                'id': row.id,
+                'caisse_id': row.caisse_id,
+                'montant': str(row.montant),
+                'devise': row.devise,
+                'statut': row.statut,
+                'date_soumission': row.date_soumission.isoformat(),
+            }
+            for row in rows
+        ]
+        return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
 
 
 class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
@@ -183,7 +244,11 @@ class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
 
         return JsonResponse(
             {
-                'results': {'articles': articles, 'caisses': caisses},
+                'results': {
+                    'articles': articles,
+                    'caisses': caisses,
+                    'devise_principale': get_primary_currency_code(self.entreprise_id),
+                },
                 'count': len(articles) + len(caisses),
                 'page': 1,
                 'page_size': 25,
@@ -200,25 +265,27 @@ class ClientSoldeApiView(ClientPortalRequiredMixin, View):
     def get(self, request, *args, **kwargs):
         from commandes.models import ClientSoldeMouvement
 
-        credits = (
-            ClientSoldeMouvement.objects.filter(
-                entreprise_id=self.entreprise_id,
-                client_id=str(self.client.pk),
-                type='credit',
-            )
-            .aggregate(s=Sum('montant'))
-            .get('s')
-            or Decimal('0')
+        credits = sum(
+            (
+                to_primary_amount(self.entreprise_id, row.montant, row.devise)
+                for row in ClientSoldeMouvement.objects.filter(
+                    entreprise_id=self.entreprise_id,
+                    client_id=str(self.client.pk),
+                    type='credit',
+                ).only('montant', 'devise')
+            ),
+            Decimal('0'),
         )
-        debits = (
-            ClientSoldeMouvement.objects.filter(
-                entreprise_id=self.entreprise_id,
-                client_id=str(self.client.pk),
-                type='debit',
-            )
-            .aggregate(s=Sum('montant'))
-            .get('s')
-            or Decimal('0')
+        debits = sum(
+            (
+                to_primary_amount(self.entreprise_id, row.montant, row.devise)
+                for row in ClientSoldeMouvement.objects.filter(
+                    entreprise_id=self.entreprise_id,
+                    client_id=str(self.client.pk),
+                    type='debit',
+                ).only('montant', 'devise')
+            ),
+            Decimal('0'),
         )
         solde = credits - debits
         garantie = solde if solde > 0 else Decimal('0')
@@ -233,6 +300,7 @@ class ClientSoldeApiView(ClientPortalRequiredMixin, View):
                     'solde': str(solde),
                     'garantie': str(garantie),
                     'dette': str(dette),
+                    'devise_principale': get_primary_currency_code(self.entreprise_id),
                 },
             },
             status=200,
@@ -285,6 +353,8 @@ class ClientTransactionsApiView(ClientPortalRequiredMixin, View):
                 'type': r.type,
                 'montant': str(r.montant),
                 'devise': r.devise,
+                'montant_principal': str(to_primary_amount(self.entreprise_id, r.montant, r.devise)),
+                'devise_principale': get_primary_currency_code(self.entreprise_id),
                 'date_mouvement': r.date_mouvement.isoformat(),
                 'source_type': r.source_type,
                 'source_id': r.source_id,
@@ -300,27 +370,26 @@ class ClientTransactionsStatsApiView(ClientPortalRequiredMixin, View):
     http_method_names = ['get']
 
     def get(self, request, *args, **kwargs):
-        qs = ClientSoldeMouvement.objects.filter(
+        by_day = {}
+        for r in ClientSoldeMouvement.objects.filter(
             entreprise_id=self.entreprise_id,
             client_id=str(self.client.pk),
-        )
-        daily = (
-            qs.annotate(day=TruncDate('date_mouvement'))
-            .values('day', 'type')
-            .annotate(total=Sum('montant'))
-            .order_by('day')
-        )
-        rows = list(daily)
-        by_day = {}
-        for r in rows:
-            day = r['day'].isoformat() if r['day'] else None
+        ).only('date_mouvement', 'type', 'montant', 'devise'):
+            day = r.date_mouvement.date().isoformat() if r.date_mouvement else None
             if not day:
                 continue
             by_day.setdefault(day, {'credit': Decimal('0'), 'debit': Decimal('0')})
-            by_day[day][r['type']] = r['total'] or Decimal('0')
+            by_day[day][r.type] = by_day[day].get(r.type, Decimal('0')) + to_primary_amount(
+                self.entreprise_id,
+                r.montant,
+                r.devise,
+            )
         out = [
             {'day': d, 'credit': str(v.get('credit') or Decimal('0')), 'debit': str(v.get('debit') or Decimal('0'))}
             for d, v in sorted(by_day.items(), key=lambda x: x[0])
         ]
-        return JsonResponse({'results': out, 'count': len(out), 'page': 1, 'page_size': 25}, status=200)
+        return JsonResponse(
+            {'results': out, 'count': len(out), 'page': 1, 'page_size': 25, 'devise_principale': get_primary_currency_code(self.entreprise_id)},
+            status=200,
+        )
 

@@ -19,6 +19,7 @@ class LotStock(models.Model):
     quantite_entree = models.DecimalField(max_digits=18, decimal_places=3, default=Decimal('0'))
     quantite_restante = models.DecimalField(max_digits=18, decimal_places=3, default=Decimal('0'), db_index=True)
     cout_unitaire_achat = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    devise = models.CharField(max_length=10, default='USD')
 
     date_entree = models.DateTimeField(db_index=True)
     date_creation = models.DateTimeField(auto_now_add=True)
@@ -38,6 +39,7 @@ class DepenseLot(models.Model):
 
     libelle = models.CharField(max_length=255)
     montant = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    devise = models.CharField(max_length=10, default='USD')
     date_depense = models.DateTimeField(db_index=True)
     date_creation = models.DateTimeField(auto_now_add=True)
 
@@ -56,7 +58,9 @@ class LotTransit(models.Model):
 
     entreprise_id = models.PositiveIntegerField(db_index=True)
     reference = models.CharField(max_length=64, db_index=True)
+    fournisseur_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     fournisseur = models.CharField(max_length=150)
+    devise = models.CharField(max_length=10, default='USD')
     date_expedition = models.DateField()
     date_arrivee_prevue = models.DateField()
     statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.EN_TRANSIT, db_index=True)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import timedelta
+from decimal import Decimal
 
 from django.conf import settings
 from django.contrib import messages
@@ -16,8 +17,9 @@ from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, ListView, TemplateView
 
-from articles.forms import ArticleForm, SousTypeArticleForm, TypeArticleForm, UniteForm
-from articles.models import Article, SousTypeArticle, TypeArticle, Unite
+from articles.currency import get_primary_currency_code
+from articles.forms import ArticleForm, DeviseForm, SousTypeArticleForm, TypeArticleForm, UniteForm
+from articles.models import Article, Devise, SousTypeArticle, TypeArticle, Unite
 from articles.utils import build_images_from_post, delete_article_media
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
@@ -286,18 +288,119 @@ class ArticleSettingsView(ArticleStoreAccessMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         tab = (self.request.GET.get('tab') or 'unites').strip().lower()
-        if tab not in ('unites', 'types'):
+        if tab not in ('unites', 'types', 'devises'):
             tab = 'unites'
         ctx['active_tab'] = tab
 
+        eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
         ctx['unites'] = Unite.objects.all().order_by('libelle')
         ctx['types'] = TypeArticle.objects.all().order_by('libelle')
         ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
+        ctx['devises'] = Devise.objects.filter(entreprise_id=int(eid)).order_by('-principale', 'code') if eid else []
+        ctx['devise_principale_code'] = get_primary_currency_code(int(eid)) if eid else get_primary_currency_code(None)
 
         ctx['form_unite'] = UniteForm(prefix='unite')
+        ctx['form_devise'] = DeviseForm(prefix='devise', initial={'actif': True, 'taux_vers_principale': Decimal('1')})
         ctx['form_type'] = TypeArticleForm(prefix='type')
         ctx['form_sous_type'] = SousTypeArticleForm(prefix='sous_type')
         return ctx
+
+
+class DeviseCreateView(ArticleStoreAccessMixin, FormView):
+    form_class = DeviseForm
+    http_method_names = ['post']
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'devise'
+        return kwargs
+
+    def form_valid(self, form):
+        eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        if eid is None:
+            messages.error(self.request, 'Selectionnez une entreprise active pour configurer les devises.')
+            return redirect(reverse('store_articles_settings') + '?tab=devises')
+        eid = int(eid)
+        obj = form.save(commit=False)
+        obj.entreprise_id = eid
+        if Devise.objects.filter(entreprise_id=eid, code=obj.code).exists():
+            messages.error(self.request, f'La devise {obj.code} existe deja pour cette entreprise.')
+            return redirect(reverse('store_articles_settings') + '?tab=devises')
+        if not Devise.objects.filter(entreprise_id=eid).exists():
+            obj.principale = True
+        if obj.principale:
+            obj.taux_vers_principale = Decimal('1')
+            obj.actif = True
+        obj.save()
+        if obj.principale:
+            Devise.objects.filter(entreprise_id=eid, principale=True).exclude(pk=obj.pk).update(principale=False)
+        messages.success(self.request, f'Devise {obj.code} enregistree.')
+        return redirect(reverse('store_articles_settings') + '?tab=devises')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=devises')
+
+
+class DeviseUpdateView(ArticleStoreAccessMixin, FormView):
+    form_class = DeviseForm
+    http_method_names = ['post']
+
+    def dispatch(self, request, *args, **kwargs):
+        eid = request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        self.eid = int(eid) if eid is not None else None
+        self.obj = Devise.objects.filter(pk=kwargs['devise_id'], entreprise_id=self.eid).first() if self.eid else None
+        if not self.obj:
+            raise Http404('Devise introuvable.')
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['prefix'] = 'devise_edit'
+        kwargs['instance'] = self.obj
+        return kwargs
+
+    def form_valid(self, form):
+        obj = form.save(commit=False)
+        if Devise.objects.filter(entreprise_id=self.eid, code=obj.code).exclude(pk=obj.pk).exists():
+            messages.error(self.request, f'La devise {obj.code} existe deja pour cette entreprise.')
+            return redirect(reverse('store_articles_settings') + '?tab=devises')
+        if not obj.principale and not Devise.objects.filter(entreprise_id=self.eid, principale=True).exclude(pk=obj.pk).exists():
+            messages.error(self.request, 'Gardez au moins une devise principale.')
+            return redirect(reverse('store_articles_settings') + '?tab=devises')
+        if obj.principale:
+            obj.taux_vers_principale = Decimal('1')
+            obj.actif = True
+        obj.save()
+        if obj.principale:
+            Devise.objects.filter(entreprise_id=self.eid, principale=True).exclude(pk=obj.pk).update(principale=False)
+        messages.success(self.request, f'Devise {obj.code} mise a jour.')
+        return redirect(reverse('store_articles_settings') + '?tab=devises')
+
+    def form_invalid(self, form):
+        for field, errs in form.errors.items():
+            for err in errs:
+                messages.error(self.request, f'{field}: {err}')
+        return redirect(reverse('store_articles_settings') + '?tab=devises')
+
+
+class DeviseDeleteView(ArticleStoreAccessMixin, View):
+    http_method_names = ['post']
+
+    def post(self, request, devise_id):
+        eid = request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        obj = Devise.objects.filter(pk=devise_id, entreprise_id=int(eid)).first() if eid is not None else None
+        if not obj:
+            raise Http404('Devise introuvable.')
+        if obj.principale:
+            messages.error(request, 'La devise principale ne peut pas etre supprimee.')
+            return redirect(reverse('store_articles_settings') + '?tab=devises')
+        code = obj.code
+        obj.delete()
+        messages.success(request, f'Devise {code} supprimee.')
+        return redirect(reverse('store_articles_settings') + '?tab=devises')
 
 
 def _paginate(qs, request, *, default_page_size: int = 25):

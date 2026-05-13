@@ -62,9 +62,10 @@
       .then(function(r){ return r.json(); })
       .then(function(data){
         var st = data.stats || {};
-        document.getElementById('tx-solde').textContent = (st.solde || '0.00') + ' USD';
-        document.getElementById('tx-garantie').textContent = (st.garantie || '0.00') + ' USD';
-        document.getElementById('tx-dette').textContent = (st.dette || '0.00') + ' USD';
+        var currency = st.devise_principale || 'USD';
+        document.getElementById('tx-solde').textContent = (st.solde || '0.00') + ' ' + currency;
+        document.getElementById('tx-garantie').textContent = (st.garantie || '0.00') + ' ' + currency;
+        document.getElementById('tx-dette').textContent = (st.dette || '0.00') + ' ' + currency;
       });
   }
 
@@ -102,7 +103,7 @@
           var typeLabel = (m.type || '').toUpperCase();
           card.innerHTML = '<div class="flex items-center justify-between gap-2">' +
             '<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">' + typeLabel + '</p>' +
-            '<p class="text-sm font-semibold tabular-nums text-black">' + m.montant + ' ' + m.devise + '</p>' +
+            '<p class="text-sm font-semibold tabular-nums text-black">' + (m.montant_principal || m.montant) + ' ' + (m.devise_principale || 'USD') + '</p>' +
             '</div>' +
             '<p class="mt-1 text-xs text-slate-600">' + (m.date_mouvement || '').slice(0,19).replace("T"," ") + '</p>' +
             '<p class="mt-1 font-mono text-[10px] text-slate-400">' + (m.source_type || '') + ' ' + (m.source_id || '') + '</p>';

@@ -83,6 +83,7 @@
   var mvPage = 1;
   var ventesPage = 1;
   var chart = null;
+  var primaryCurrency = '{{ devise_principale_code|escapejs }}';
 
   function qs(params) {
     return Object.keys(params).filter(function(k){ return params[k] !== '' && params[k] != null; })
@@ -141,9 +142,10 @@
       .then(function(data){
         if (!data.ok) return;
         var solde = data.stats.solde || '0.00';
-        document.getElementById('client-solde').textContent = solde + ' USD';
-        document.getElementById('client-garantie').textContent = (data.stats.garantie || '0.00') + ' USD';
-        document.getElementById('client-dette').textContent = (data.stats.dette || '0.00') + ' USD';
+        primaryCurrency = data.stats.devise_principale || primaryCurrency;
+        document.getElementById('client-solde').textContent = solde + ' ' + primaryCurrency;
+        document.getElementById('client-garantie').textContent = (data.stats.garantie || '0.00') + ' ' + primaryCurrency;
+        document.getElementById('client-dette').textContent = (data.stats.dette || '0.00') + ' ' + primaryCurrency;
       });
   }
 
@@ -193,7 +195,7 @@
             '<p class="font-mono text-xs font-semibold text-black">' + v.vente_id + '</p>' +
             '<span class="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-700">' + (v.type_vente || '') + '</span>' +
             '</div>' +
-            '<p class="mt-1 text-sm font-semibold tabular-nums text-black">' + v.total + ' ' + v.devise + '</p>' +
+            '<p class="mt-1 text-sm font-semibold tabular-nums text-black">' + (v.total_principal || v.total) + ' ' + (v.devise_principale || primaryCurrency) + '</p>' +
             '<p class="mt-1 text-xs text-slate-600">' + (v.date_vente || '').slice(0,19).replace("T"," ") + '</p>';
           wrap.appendChild(card);
         });
@@ -216,7 +218,7 @@
           card.className = 'rounded-2xl border border-slate-200 bg-white p-3';
           card.innerHTML = '<div class="flex items-center justify-between gap-2">' +
             '<p class="text-xs font-semibold uppercase tracking-wide text-slate-500">' + m.type + '</p>' +
-            '<p class="text-sm font-semibold tabular-nums text-black">' + m.montant + ' ' + m.devise + '</p>' +
+            '<p class="text-sm font-semibold tabular-nums text-black">' + (m.montant_principal || m.montant) + ' ' + (m.devise_principale || primaryCurrency) + '</p>' +
             '</div>' +
             '<p class="mt-1 text-xs text-slate-600">' + (m.date_mouvement || '').slice(0,19).replace("T"," ") + '</p>' +
             '<p class="mt-1 font-mono text-[10px] text-slate-400">' + (m.source_type || '') + ' ' + (m.source_id || '') + '</p>';
@@ -238,7 +240,7 @@
     fetch('/magasin/clients/api/clients/' + encodeURIComponent(selectedClientId) + '/crediter/', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
-      body: JSON.stringify({ caisse_id: caisseId, montant: montant, libelle: libelle, devise: 'USD' })
+      body: JSON.stringify({ caisse_id: caisseId, montant: montant, libelle: libelle })
     }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
       .then(function(res){
         if (!res.ok || !res.json.ok) { msg.textContent = res.json.error || 'Erreur'; return; }

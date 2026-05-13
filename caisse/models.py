@@ -28,6 +28,7 @@ class MouvementCaisse(models.Model):
     caisse_id = models.BigIntegerField(db_index=True)
     type = models.CharField(max_length=10, choices=Type.choices)
     montant = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    devise = models.CharField(max_length=10, default='USD')
     date_mouvement = models.DateTimeField(db_index=True)
     libelle = models.CharField(max_length=255, blank=True)
 
