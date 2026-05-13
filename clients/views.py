@@ -12,8 +12,8 @@ from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
-from caisse.models import MouvementCaisse
-from commandes.models import ClientSoldeMouvement
+from caisse.models import CaisseCompte, MouvementCaisse
+from commandes.models import ClientDettePaiement, ClientSoldeMouvement
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import AffectationEntreprise, Client, User
 from users.navigation import can_access_store_module
@@ -267,6 +267,8 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
         if not str(caisse_id).isdigit():
             return JsonResponse({'ok': False, 'error': 'caisse_id requis.'}, status=400)
         caisse_id = int(caisse_id)
+        if not CaisseCompte.objects.filter(entreprise_id=eid, id=caisse_id, actif=True).exists():
+            return JsonResponse({'ok': False, 'error': 'Sous-compte caisse introuvable ou inactif.'}, status=400)
 
         montant = _d(payload.get('montant'))
         if montant <= 0:
@@ -302,4 +304,93 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
             source_id='',
         )
         return JsonResponse({'ok': True}, status=201)
+
+
+class ClientDettePaiementsApiView(ClientsAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, client_id: str, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
+        if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
+            return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
+
+        qs = ClientDettePaiement.objects.filter(entreprise_id=eid, client_id=client_id).order_by('-date_soumission', '-id')
+        statut = (request.GET.get('statut') or '').strip()
+        if statut:
+            qs = qs.filter(statut=statut)
+        rows, count, page, page_size = _paginate(qs, request, default_page_size=10)
+        caisse_ids = [row.caisse_id for row in rows]
+        caisses = {c.id: c.nom for c in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)}
+        results = [
+            {
+                'id': row.id,
+                'client_id': row.client_id,
+                'caisse_id': row.caisse_id,
+                'caisse_nom': caisses.get(row.caisse_id, ''),
+                'montant': str(row.montant),
+                'devise': row.devise,
+                'montant_principal': str(to_primary_amount(eid, row.montant, row.devise)),
+                'devise_principale': get_primary_currency_code(eid),
+                'statut': row.statut,
+                'note_client': row.note_client,
+                'preuve_paiement_url': row.preuve_paiement.url if row.preuve_paiement else '',
+                'date_soumission': row.date_soumission.isoformat(),
+            }
+            for row in rows
+        ]
+        return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
+
+
+class ClientDettePaiementConfirmerApiView(ClientsAccessMixin, View):
+    http_method_names = ['post']
+
+    @transaction.atomic
+    def post(self, request, client_id: str, paiement_id: int, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'ok': False, 'error': 'Entreprise active requise.'}, status=400)
+        if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Client non rattache a cette entreprise.'}, status=400)
+        paiement = ClientDettePaiement.objects.select_for_update().filter(
+            entreprise_id=eid,
+            client_id=client_id,
+            pk=paiement_id,
+        ).first()
+        if not paiement:
+            return JsonResponse({'ok': False, 'error': 'Paiement introuvable.'}, status=404)
+        if paiement.statut != ClientDettePaiement.Statut.EN_ATTENTE:
+            return JsonResponse({'ok': False, 'error': 'Ce paiement a deja ete traite.'}, status=400)
+        if not CaisseCompte.objects.filter(entreprise_id=eid, id=paiement.caisse_id, actif=True).exists():
+            return JsonResponse({'ok': False, 'error': 'Sous-compte caisse introuvable ou inactif.'}, status=400)
+
+        dt = timezone.now()
+        MouvementCaisse.objects.create(
+            entreprise_id=eid,
+            caisse_id=paiement.caisse_id,
+            type=MouvementCaisse.Type.ENTREE,
+            montant=paiement.montant,
+            devise=paiement.devise,
+            date_mouvement=dt,
+            libelle=f'Paiement dette client {client_id}',
+            source_type='dette_client',
+            source_id=str(paiement.pk),
+            created_by_user_id=str(request.user.pk),
+        )
+        ClientSoldeMouvement.objects.create(
+            entreprise_id=eid,
+            client_id=client_id,
+            type=ClientSoldeMouvement.Type.CREDIT,
+            montant=paiement.montant,
+            devise=paiement.devise,
+            date_mouvement=dt,
+            source_type='paiement_dette',
+            source_id=str(paiement.pk),
+        )
+        paiement.statut = ClientDettePaiement.Statut.CONFIRME
+        paiement.date_confirmation = dt
+        paiement.confirmed_by_user_id = str(request.user.pk)
+        paiement.save(update_fields=['statut', 'date_confirmation', 'confirmed_by_user_id'])
+        return JsonResponse({'ok': True}, status=200)
 
