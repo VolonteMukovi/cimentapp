@@ -174,6 +174,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         ctx['dashboard_total_ventes'] = Decimal('0')
         ctx['dashboard_ventes_jour'] = Decimal('0')
         ctx['dashboard_total_caisse'] = Decimal('0')
+        ctx['dashboard_situation_nette'] = Decimal('0')
         ctx['dashboard_dettes_clients'] = Decimal('0')
         ctx['dashboard_commandes_en_cours'] = 0
         ctx['dashboard_caisse_ops'] = 0
@@ -212,6 +213,7 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 ctx['dashboard_total_ventes'] = total_ventes
                 ctx['dashboard_ventes_jour'] = ventes_jour
                 ctx['dashboard_total_caisse'] = sum(cash_balances_by_caisse(eid_int).values(), Decimal('0'))
+                ctx['dashboard_situation_nette'] = ctx['dashboard_total_caisse']
                 ctx['dashboard_caisse_ops'] = MouvementCaisse.objects.filter(entreprise_id=eid_int).count()
                 ctx['dashboard_commandes_en_cours'] = Commande.objects.filter(
                     entreprise_id=eid_int,

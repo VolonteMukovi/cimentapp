@@ -238,7 +238,11 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
                     'count': 0,
                     'page': 1,
                     'page_size': 25,
-                    'stats': {'total': '0.00', 'devise_principale': get_primary_currency_code(None)},
+                    'stats': {
+                        'total': '0.00',
+                        'situation_nette': '0.00',
+                        'devise_principale': get_primary_currency_code(None),
+                    },
                 },
                 status=200,
             )
@@ -287,7 +291,11 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
                 'count': count,
                 'page': page,
                 'page_size': page_size,
-                'stats': {'total': str(total), 'devise_principale': get_primary_currency_code(eid)},
+                'stats': {
+                    'total': str(total),
+                    'situation_nette': str(total),
+                    'devise_principale': get_primary_currency_code(eid),
+                },
             },
             status=200,
         )

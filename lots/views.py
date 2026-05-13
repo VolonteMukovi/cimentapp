@@ -66,6 +66,25 @@ def _d(v) -> Decimal:
         return Decimal('0')
 
 
+def _next_lot_reference(eid: int) -> str:
+    year = timezone.localdate().year
+    prefix = f'Lot_{year}_'
+    refs = list(
+        LotTransit.objects.filter(entreprise_id=eid, reference__startswith=prefix).values_list('reference', flat=True)
+    )
+    refs.extend(
+        LotStock.objects.filter(entreprise_id=eid, reference__startswith=prefix).values_list('reference', flat=True)
+    )
+    last = 0
+    for ref in refs:
+        try:
+            order = int(str(ref).replace(prefix, '', 1))
+        except Exception:
+            continue
+        last = max(last, order)
+    return f'{prefix}{last + 1:03d}'
+
+
 class LotsAccessMixin(LoginRequiredMixin):
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated or not isinstance(request.user, User):
@@ -206,7 +225,7 @@ class LotStockCreateApiView(LotsAccessMixin, View):
         except ValueError as exc:
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
-        reference = (payload.get('reference') or '').strip()[:255]
+        reference = (payload.get('reference') or '').strip()[:255] or _next_lot_reference(eid)
         dt_raw = payload.get('date_entree')
         if dt_raw:
             dt = _parse_dt(str(dt_raw))
@@ -398,10 +417,10 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
         except Exception:
             payload = {}
 
-        reference = str(payload.get('reference') or '').strip()[:64]
+        reference = _next_lot_reference(eid)
         fournisseur_id = payload.get('fournisseur_id')
-        if not reference or not str(fournisseur_id).isdigit():
-            return JsonResponse({'ok': False, 'error': 'reference et fournisseur_id sont requis.'}, status=400)
+        if not str(fournisseur_id).isdigit():
+            return JsonResponse({'ok': False, 'error': 'fournisseur_id requis.'}, status=400)
         fournisseur = Fournisseur.objects.filter(
             entreprise_id=eid,
             id=int(fournisseur_id),
@@ -581,7 +600,12 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
         # PU réel proposé = PU achat + prorata frais / quantité totale du lot
         frais_per_unit = (total_frais / total_qte).quantize(Decimal('0.01')) if total_qte > 0 else Decimal('0')
         for line in created_articles:
-            line.pu_reel_propose = (line.prix_unitaire_achat + frais_per_unit).quantize(Decimal('0.01'))
+            if total_articles > 0 and line.quantite > 0:
+                allocated_fees = (total_frais * (line.cout_total / total_articles)).quantize(Decimal('0.01'))
+                frais_ligne_unit = (allocated_fees / line.quantite).quantize(Decimal('0.01'))
+            else:
+                frais_ligne_unit = Decimal('0')
+            line.pu_reel_propose = (line.prix_unitaire_achat + frais_ligne_unit).quantize(Decimal('0.01'))
             line.save(update_fields=['pu_reel_propose'])
 
         cout_total_lot = (total_articles + total_frais).quantize(Decimal('0.01'))
@@ -619,6 +643,15 @@ class LotTransitApiListView(LotsAccessMixin, View):
                 LotTransitArticle.objects.filter(lot_transit_id=lot.id).aggregate(s=Sum('cout_total')).get('s') or Decimal('0')
             )
             total_frais = LotTransitFrais.objects.filter(lot_transit_id=lot.id).aggregate(s=Sum('montant')).get('s') or Decimal('0')
+            articles = [
+                {
+                    'article_id': line.article_id,
+                    'quantite': str(line.quantite),
+                    'prix_unitaire_achat': str(line.prix_unitaire_achat),
+                    'pu_reel_propose': str(line.pu_reel_propose),
+                }
+                for line in LotTransitArticle.objects.filter(lot_transit_id=lot.id).order_by('id')
+            ]
             results.append(
                 {
                     'id': lot.id,
@@ -630,6 +663,7 @@ class LotTransitApiListView(LotsAccessMixin, View):
                     'date_arrivee_prevue': lot.date_arrivee_prevue.isoformat(),
                     'statut': lot.statut,
                     'cout_total_lot': str(total_articles + total_frais),
+                    'articles': articles,
                 }
             )
         return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)

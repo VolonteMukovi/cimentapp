@@ -164,6 +164,8 @@ class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': 'Commande introuvable.'}, status=404)
         if not cmd.client_id:
             return JsonResponse({'ok': False, 'error': 'Commande sans client.'}, status=400)
+        if Vente.objects.filter(entreprise_id=eid, commande_id=cmd.commande_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Commande verrouillee: une vente existe deja.'}, status=400)
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
         except Exception:
