@@ -8,6 +8,7 @@ from django.db import models
 
 class Commande(models.Model):
     class Statut(models.TextChoices):
+        EN_ATTENTE = 'en_attente', 'En attente'
         RESERVEE = 'reservee', 'Réservée'
         VALIDEE = 'validee', 'Validée'
         LIVREE = 'livree', 'Livrée'
@@ -17,7 +18,7 @@ class Commande(models.Model):
     entreprise_id = models.PositiveIntegerField(db_index=True)
     client_id = models.CharField(max_length=32, blank=True, db_index=True)
 
-    statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.RESERVEE, db_index=True)
+    statut = models.CharField(max_length=20, choices=Statut.choices, default=Statut.EN_ATTENTE, db_index=True)
     devise = models.CharField(max_length=10, default='USD')
     total = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
 
@@ -86,5 +87,38 @@ class ClientSoldeMouvement(models.Model):
         ordering = ['-date_mouvement', '-id']
         indexes = [
             models.Index(fields=['entreprise_id', 'client_id', 'date_mouvement']),
+        ]
+
+
+class ClientDettePaiement(models.Model):
+    class Statut(models.TextChoices):
+        EN_ATTENTE = 'en_attente', 'En attente'
+        CONFIRME = 'confirme', 'ConfirmÃ©'
+        REFUSE = 'refuse', 'RefusÃ©'
+
+    entreprise_id = models.PositiveIntegerField(db_index=True)
+    client_id = models.CharField(max_length=32, db_index=True)
+    caisse_id = models.BigIntegerField(db_index=True)
+    montant = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    devise = models.CharField(max_length=10, default='USD')
+    preuve_paiement = models.ImageField(upload_to='dettes/preuves/', blank=True, null=True)
+    note_client = models.CharField(max_length=500, blank=True)
+    statut = models.CharField(
+        max_length=20,
+        choices=Statut.choices,
+        default=Statut.EN_ATTENTE,
+        db_index=True,
+    )
+    date_soumission = models.DateTimeField(db_index=True)
+    date_confirmation = models.DateTimeField(blank=True, null=True)
+    confirmed_by_user_id = models.CharField(max_length=64, blank=True)
+
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_soumission', '-id']
+        indexes = [
+            models.Index(fields=['entreprise_id', 'client_id', 'date_soumission']),
+            models.Index(fields=['entreprise_id', 'statut', 'date_soumission']),
         ]
 

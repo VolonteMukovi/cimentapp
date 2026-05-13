@@ -67,11 +67,12 @@
     .then(function(r){ return r.json(); })
     .then(function(data){
       var s = (data.stats || {});
-      set('portal-garantie', (s.garantie || '0.00') + ' USD');
-      set('portal-dette', (s.dette || '0.00') + ' USD');
-      set('portal-solde', (s.solde || '0.00') + ' USD');
-      set('portal-dette-card', (s.dette || '0.00') + ' USD');
-      set('portal-garantie-card', (s.garantie || '0.00') + ' USD');
+      var currency = s.devise_principale || 'USD';
+      set('portal-garantie', (s.garantie || '0.00') + ' ' + currency);
+      set('portal-dette', (s.dette || '0.00') + ' ' + currency);
+      set('portal-solde', (s.solde || '0.00') + ' ' + currency);
+      set('portal-dette-card', (s.dette || '0.00') + ' ' + currency);
+      set('portal-garantie-card', (s.garantie || '0.00') + ' ' + currency);
     })
     .catch(function(){});
 })();

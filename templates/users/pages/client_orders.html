@@ -74,7 +74,8 @@
     return fetch('/fr/client/commandes/api/stats/', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
       .then(function(data){
-        document.getElementById('client-orders-total').textContent = (data.stats && data.stats.total) ? (data.stats.total + ' USD') : '0.00 USD';
+        var currency = (data.stats && data.stats.devise_principale) ? data.stats.devise_principale : 'USD';
+        document.getElementById('client-orders-total').textContent = (data.stats && data.stats.total) ? (data.stats.total + ' ' + currency) : ('0.00 ' + currency);
         document.getElementById('client-orders-meta').textContent = (data.stats && data.stats.commandes != null) ? (data.stats.commandes + ' commandes') : '';
 
         var labels = (data.results || []).map(function(r){ return r.day; });

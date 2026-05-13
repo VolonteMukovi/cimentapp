@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 import secrets
 
 from django.db import models
@@ -52,6 +53,38 @@ class Unite(models.Model):
 
     def __str__(self) -> str:
         return f'{self.libelle} ({self.code})'
+
+
+class Devise(models.Model):
+    """Devise configuree par entreprise pour les montants financiers."""
+
+    entreprise_id = models.PositiveIntegerField(db_index=True)
+    code = models.CharField(max_length=10)
+    libelle = models.CharField(max_length=64, blank=True)
+    principale = models.BooleanField(default=False, db_index=True)
+    taux_vers_principale = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        default=Decimal('1'),
+        help_text='Valeur de 1 unite de cette devise dans la devise principale.',
+    )
+    actif = models.BooleanField(default=True)
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-principale', 'code']
+        verbose_name = 'devise'
+        verbose_name_plural = 'devises'
+        constraints = [
+            models.UniqueConstraint(fields=('entreprise_id', 'code'), name='unique_devise_code_par_entreprise'),
+        ]
+        indexes = [
+            models.Index(fields=['entreprise_id', 'principale', 'actif']),
+        ]
+
+    def __str__(self) -> str:
+        suffix = ' principale' if self.principale else ''
+        return f'{self.code}{suffix}'
 
 
 class Article(models.Model):

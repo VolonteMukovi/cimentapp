@@ -1,0 +1,84 @@
+{% extends "base_app.html" %}
+{% block title %}Fournisseurs — CimentApp{% endblock %}
+
+{% block content %}
+  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
+    <h1 class="text-2xl font-bold tracking-tight text-black">Enregistrement des fournisseurs</h1>
+    <p class="mt-1 text-sm text-slate-600">Ajoutez un fournisseur avec son nom, son contact et son statut.</p>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <h2 class="text-base font-bold text-black">Nouveau fournisseur</h2>
+    <form method="post" class="mt-4 space-y-3">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="create">
+      <div>
+        <label for="{{ form.nom.id_for_label }}" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Nom</label>
+        {{ form.nom }}
+        {% if form.nom.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.nom.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <label for="{{ form.contact.id_for_label }}" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Contact</label>
+        {{ form.contact }}
+        {% if form.contact.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.contact.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <div>
+        <label for="{{ form.statut.id_for_label }}" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Statut</label>
+        {{ form.statut }}
+        {% if form.statut.errors %}
+          <p class="mt-1 text-xs text-red-600">{{ form.statut.errors|join:", " }}</p>
+        {% endif %}
+      </div>
+      <button type="submit" class="w-full rounded-full bg-black px-4 py-3 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 sm:w-auto">
+        Enregistrer
+      </button>
+    </form>
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <h2 class="text-base font-bold text-black">Fournisseurs enregistrés</h2>
+    <div class="mt-4 space-y-2">
+      {% for fournisseur in fournisseurs %}
+      <div class="rounded-2xl border border-slate-200 bg-white p-3">
+        <div class="mb-2 flex items-center justify-between gap-2">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Fournisseur #{{ fournisseur.id }}</p>
+          <span class="rounded-full px-2.5 py-1 text-xs font-semibold {% if fournisseur.statut == 'actif' %}bg-emerald-100 text-emerald-700{% else %}bg-slate-200 text-slate-700{% endif %}">
+            {{ fournisseur.get_statut_display }}
+          </span>
+        </div>
+        <form method="post" class="space-y-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="fournisseur_id" value="{{ fournisseur.id }}">
+          <input type="text" name="nom" value="{{ fournisseur.nom }}" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <input type="text" name="contact" value="{{ fournisseur.contact }}" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <select name="statut" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+            <option value="actif" {% if fournisseur.statut == 'actif' %}selected{% endif %}>Actif</option>
+            <option value="inactif" {% if fournisseur.statut == 'inactif' %}selected{% endif %}>Inactif</option>
+          </select>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="rounded-full bg-black px-3 py-2 text-xs font-semibold text-white transition hover:bg-neutral-800">
+              Modifier
+            </button>
+          </div>
+        </form>
+        <form method="post" class="mt-2">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="fournisseur_id" value="{{ fournisseur.id }}">
+          <button type="submit" onclick="return confirm('Supprimer ce fournisseur ?');" class="rounded-full border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50">
+            Supprimer
+          </button>
+        </form>
+      </div>
+      {% empty %}
+      <p class="text-sm text-slate-500">Aucun fournisseur enregistré pour l’entreprise active.</p>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}
+

@@ -6,16 +6,16 @@ from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Q, Sum
-from django.db.models.functions import TruncDate
+from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
+from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
 from caisse.models import MouvementCaisse
 from commandes.models import ClientSoldeMouvement
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
-from users.models import Client, User
+from users.models import AffectationEntreprise, Client, User
 from users.navigation import can_access_store_module
 from ventes.models import Vente
 
@@ -67,8 +67,10 @@ class ClientsHomeView(ClientsAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        eid = self.entreprise_id()
         ctx['store_module_key'] = 'clients'
         ctx['store_module_title'] = 'Clients & garanties'
+        ctx['devise_principale_code'] = get_primary_currency_code(eid)
         return ctx
 
 
@@ -105,17 +107,27 @@ class ClientsApiListView(ClientsAccessMixin, View):
 
 
 def _compute_solde(eid: int, client_id: str) -> tuple[Decimal, Decimal, Decimal]:
-    credits = (
-        ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=client_id, type='credit')
-        .aggregate(s=Sum('montant'))
-        .get('s')
-        or Decimal('0')
+    credits = sum(
+        (
+            to_primary_amount(eid, row.montant, row.devise)
+            for row in ClientSoldeMouvement.objects.filter(
+                entreprise_id=eid,
+                client_id=client_id,
+                type='credit',
+            ).only('montant', 'devise')
+        ),
+        Decimal('0'),
     )
-    debits = (
-        ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=client_id, type='debit')
-        .aggregate(s=Sum('montant'))
-        .get('s')
-        or Decimal('0')
+    debits = sum(
+        (
+            to_primary_amount(eid, row.montant, row.devise)
+            for row in ClientSoldeMouvement.objects.filter(
+                entreprise_id=eid,
+                client_id=client_id,
+                type='debit',
+            ).only('montant', 'devise')
+        ),
+        Decimal('0'),
     )
     solde = credits - debits
     garantie = solde if solde > 0 else Decimal('0')
@@ -141,6 +153,7 @@ class ClientResumeApiView(ClientsAccessMixin, View):
                     'garantie': str(garantie),
                     'dette': str(dette),
                     'ventes': ventes_count,
+                    'devise_principale': get_primary_currency_code(eid),
                 },
             },
             status=200,
@@ -165,6 +178,8 @@ class ClientMouvementsApiView(ClientsAccessMixin, View):
                 'type': r.type,
                 'montant': str(r.montant),
                 'devise': r.devise,
+                'montant_principal': str(to_primary_amount(eid, r.montant, r.devise)),
+                'devise_principale': get_primary_currency_code(eid),
                 'date_mouvement': r.date_mouvement.isoformat(),
                 'source_type': r.source_type,
                 'source_id': r.source_id,
@@ -189,6 +204,8 @@ class ClientVentesApiView(ClientsAccessMixin, View):
                 'type_vente': r.type_vente,
                 'total': str(r.total),
                 'devise': r.devise,
+                'total_principal': str(to_primary_amount(eid, r.total, r.devise)),
+                'devise_principale': get_primary_currency_code(eid),
                 'date_vente': r.date_vente.isoformat(),
                 'commande_id': r.commande_id,
             }
@@ -207,27 +224,26 @@ class ClientStatsApiView(ClientsAccessMixin, View):
         if eid is None:
             return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
 
-        qs = ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=client_id)
-        daily = (
-            qs.annotate(day=TruncDate('date_mouvement'))
-            .values('day', 'type')
-            .annotate(total=Sum('montant'))
-            .order_by('day')
-        )
-        rows = list(daily)
-        # regroupe en {day: {credit, debit}}
         by_day = {}
-        for r in rows:
-            day = r['day'].isoformat() if r['day'] else None
+        for r in ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=client_id).only(
+            'date_mouvement',
+            'type',
+            'montant',
+            'devise',
+        ):
+            day = r.date_mouvement.date().isoformat() if r.date_mouvement else None
             if not day:
                 continue
             by_day.setdefault(day, {'credit': Decimal('0'), 'debit': Decimal('0')})
-            by_day[day][r['type']] = r['total'] or Decimal('0')
+            by_day[day][r.type] = by_day[day].get(r.type, Decimal('0')) + to_primary_amount(eid, r.montant, r.devise)
         out = [
             {'day': d, 'credit': str(v.get('credit') or Decimal('0')), 'debit': str(v.get('debit') or Decimal('0'))}
             for d, v in sorted(by_day.items(), key=lambda x: x[0])
         ]
-        return JsonResponse({'results': out, 'count': len(out), 'page': 1, 'page_size': 25}, status=200)
+        return JsonResponse(
+            {'results': out, 'count': len(out), 'page': 1, 'page_size': 25, 'devise_principale': get_primary_currency_code(eid)},
+            status=200,
+        )
 
 
 class ClientCrediterApiView(ClientsAccessMixin, View):
@@ -240,6 +256,8 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
         eid = self.entreprise_id()
         if eid is None:
             return JsonResponse({'ok': False, 'error': 'Entreprise active requise.'}, status=400)
+        if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Client non rattache a cette entreprise.'}, status=400)
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
         except Exception:
@@ -253,6 +271,10 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
         montant = _d(payload.get('montant'))
         if montant <= 0:
             return JsonResponse({'ok': False, 'error': 'montant invalide.'}, status=400)
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
         libelle = str(payload.get('libelle') or 'Dépôt client').strip()[:255]
         dt = timezone.now()
@@ -262,6 +284,7 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
             caisse_id=caisse_id,
             type=MouvementCaisse.Type.ENTREE,
             montant=montant,
+            devise=devise,
             date_mouvement=dt,
             libelle=f'{libelle} ({client_id})',
             source_type='client',
@@ -273,7 +296,7 @@ class ClientCrediterApiView(ClientsAccessMixin, View):
             client_id=client_id,
             type=ClientSoldeMouvement.Type.CREDIT,
             montant=montant,
-            devise=str(payload.get('devise') or 'USD')[:10] or 'USD',
+            devise=devise,
             date_mouvement=dt,
             source_type='depot',
             source_id='',

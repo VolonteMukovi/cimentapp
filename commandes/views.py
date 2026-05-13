@@ -6,14 +6,15 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
+from articles.currency import get_primary_currency_code, to_primary_amount
 from caisse.models import MouvementCaisse
-from commandes.models import ClientSoldeMouvement, Commande, CommandeLigne
+from commandes.models import ClientDettePaiement, ClientSoldeMouvement, Commande, CommandeLigne
 from lots.models import DepenseLot, LotStock
+from lots.services import sync_lot_transit_closure
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
 from users.navigation import can_access_store_module
@@ -79,20 +80,39 @@ class CommandesApiListView(CommandesAccessMixin, View):
             qs = qs.filter(statut=statut)
 
         rows, count, page, page_size = _paginate(qs, request)
-        results = [
-            {
-                'commande_id': r.commande_id,
-                'client_id': r.client_id,
-                'statut': r.statut,
-                'total': str(r.total),
-                'devise': r.devise,
-                'caisse_id': r.caisse_id,
-                'paiement_statut': r.paiement_statut,
-                'depot_montant': str(r.depot_montant),
-                'date_commande': r.date_commande.isoformat(),
-            }
-            for r in rows
-        ]
+        commande_ids = [r.commande_id for r in rows]
+        lignes_by_cmd: dict[str, list[dict]] = {}
+        for line in CommandeLigne.objects.filter(commande_id__in=commande_ids).order_by('id'):
+            lignes_by_cmd.setdefault(line.commande_id, []).append(
+                {
+                    'id': line.id,
+                    'article_id': line.article_id,
+                    'quantite': str(line.quantite),
+                    'prix_unitaire': str(line.prix_unitaire),
+                    'total_ligne': str(line.total_ligne),
+                }
+            )
+
+        results = []
+        for r in rows:
+            solde = _client_solde_principal(eid, r.client_id) if r.client_id else Decimal('0')
+            results.append(
+                {
+                    'commande_id': r.commande_id,
+                    'client_id': r.client_id,
+                    'statut': r.statut,
+                    'total': str(r.total),
+                    'devise': r.devise,
+                    'total_principal': str(to_primary_amount(eid, r.total, r.devise)),
+                    'devise_principale': get_primary_currency_code(eid),
+                    'solde_client_principal': str(solde),
+                    'caisse_id': r.caisse_id,
+                    'paiement_statut': r.paiement_statut,
+                    'depot_montant': str(r.depot_montant),
+                    'date_commande': r.date_commande.isoformat(),
+                    'lignes': lignes_by_cmd.get(r.commande_id, []),
+                }
+            )
         return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
 
 
@@ -101,6 +121,32 @@ def _d(v) -> Decimal:
         return Decimal(str(v))
     except Exception:
         return Decimal('0')
+
+
+def _client_solde_principal(eid: int, client_id: str) -> Decimal:
+    credits = sum(
+        (
+            to_primary_amount(eid, mv.montant, mv.devise)
+            for mv in ClientSoldeMouvement.objects.filter(
+                entreprise_id=eid,
+                client_id=str(client_id),
+                type=ClientSoldeMouvement.Type.CREDIT,
+            ).only('montant', 'devise')
+        ),
+        Decimal('0'),
+    )
+    debits = sum(
+        (
+            to_primary_amount(eid, mv.montant, mv.devise)
+            for mv in ClientSoldeMouvement.objects.filter(
+                entreprise_id=eid,
+                client_id=str(client_id),
+                type=ClientSoldeMouvement.Type.DEBIT,
+            ).only('montant', 'devise')
+        ),
+        Decimal('0'),
+    )
+    return credits - debits
 
 
 class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
@@ -118,6 +164,8 @@ class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': 'Commande introuvable.'}, status=404)
         if not cmd.client_id:
             return JsonResponse({'ok': False, 'error': 'Commande sans client.'}, status=400)
+        if Vente.objects.filter(entreprise_id=eid, commande_id=cmd.commande_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Commande verrouillee: une vente existe deja.'}, status=400)
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
         except Exception:
@@ -128,9 +176,11 @@ class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': 'caisse_id requis.'}, status=400)
         caisse_id = int(caisse_id)
 
-        montant = _d(payload.get('montant') or cmd.total)
+        montant = _d(payload.get('montant') or cmd.depot_montant)
         if montant <= 0:
             return JsonResponse({'ok': False, 'error': 'montant invalide.'}, status=400)
+        if cmd.statut == Commande.Statut.LIVREE:
+            return JsonResponse({'ok': False, 'error': 'Cette commande est deja livree.'}, status=400)
 
         dt = timezone.now()
 
@@ -139,6 +189,7 @@ class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
             caisse_id=caisse_id,
             type=MouvementCaisse.Type.ENTREE,
             montant=montant,
+            devise=cmd.devise,
             date_mouvement=dt,
             libelle=f'Dépôt commande {cmd.commande_id}',
             source_type='commande',
@@ -158,7 +209,8 @@ class CommandeConfirmerDepotApiView(CommandesAccessMixin, View):
         cmd.caisse_id = caisse_id
         cmd.depot_montant = montant
         cmd.paiement_statut = Commande.PaiementStatut.CONFIRME
-        cmd.save(update_fields=['caisse_id', 'depot_montant', 'paiement_statut'])
+        cmd.statut = Commande.Statut.RESERVEE
+        cmd.save(update_fields=['caisse_id', 'depot_montant', 'paiement_statut', 'statut'])
         return JsonResponse({'ok': True}, status=200)
 
 
@@ -177,22 +229,58 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': 'Commande introuvable.'}, status=404)
         if not cmd.client_id:
             return JsonResponse({'ok': False, 'error': 'Commande sans client.'}, status=400)
+        if cmd.statut != Commande.Statut.RESERVEE:
+            return JsonResponse({'ok': False, 'error': 'La commande doit etre reservee avant livraison.'}, status=400)
+        if Vente.objects.filter(entreprise_id=eid, commande_id=cmd.commande_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Une vente existe deja pour cette commande.'}, status=400)
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
 
-        # solde actuel
-        credits = (
-            ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=str(cmd.client_id), type='credit')
-            .aggregate(s=Sum('montant'))
-            .get('s')
-            or Decimal('0')
-        )
-        debits = (
-            ClientSoldeMouvement.objects.filter(entreprise_id=eid, client_id=str(cmd.client_id), type='debit')
-            .aggregate(s=Sum('montant'))
-            .get('s')
-            or Decimal('0')
-        )
-        solde = credits - debits
-        type_vente = 'comptant' if solde >= (cmd.total or Decimal('0')) else 'credit'
+        lignes_cmd = list(CommandeLigne.objects.filter(commande_id=cmd.commande_id).order_by('id'))
+        if not lignes_cmd:
+            return JsonResponse({'ok': False, 'error': 'Commande sans lignes.'}, status=400)
+
+        delivered_by_line_id: dict[int, Decimal] = {}
+        unit_price_by_line_id: dict[int, Decimal] = {}
+        delivered_payload = payload.get('lignes') or []
+        if isinstance(delivered_payload, list):
+            for row in delivered_payload:
+                if not isinstance(row, dict):
+                    continue
+                line_id = row.get('id') or row.get('ligne_id')
+                qte = _d(row.get('quantite'))
+                prix = _d(row.get('prix_unitaire'))
+                if str(line_id).isdigit() and qte > 0:
+                    delivered_by_line_id[int(line_id)] = qte
+                    if prix > 0:
+                        unit_price_by_line_id[int(line_id)] = prix
+
+        normalized_lines = []
+        total_livre = Decimal('0')
+        for line in lignes_cmd:
+            qte_livree = delivered_by_line_id.get(line.id, line.quantite)
+            prix_unitaire = unit_price_by_line_id.get(line.id)
+            if qte_livree <= 0:
+                return JsonResponse({'ok': False, 'error': f'Quantite livree invalide pour {line.article_id}.'}, status=400)
+            if prix_unitaire is None or prix_unitaire <= 0:
+                return JsonResponse({'ok': False, 'error': f'Prix de vente unitaire requis pour {line.article_id}.'}, status=400)
+            total_ligne = (qte_livree * prix_unitaire).quantize(Decimal('0.01'))
+            total_livre += total_ligne
+            normalized_lines.append(
+                {
+                    'source': line,
+                    'quantite': qte_livree,
+                    'prix_unitaire': prix_unitaire,
+                    'total_ligne': total_ligne,
+                }
+            )
+
+        # La vente est comptant si la garantie d'achat couvre le total livre, sinon credit.
+        solde = _client_solde_principal(eid, str(cmd.client_id))
+        total_livre_principal = to_primary_amount(eid, total_livre, cmd.devise)
+        type_vente = 'comptant' if solde >= (total_livre_principal or Decimal('0')) else 'credit'
 
         vente = Vente(
             vente_id=Vente.generate_id(),
@@ -201,7 +289,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
             client_nom='',
             commande_id=cmd.commande_id,
             type_vente=type_vente,
-            total=cmd.total,
+            total=total_livre,
             devise=cmd.devise,
             caisse_id=cmd.caisse_id if type_vente == 'comptant' else None,
             date_vente=timezone.now(),
@@ -209,20 +297,16 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
         )
         vente.save()
 
-        lignes_cmd = list(CommandeLigne.objects.filter(commande_id=cmd.commande_id).order_by('id'))
-        if not lignes_cmd:
-            return JsonResponse({'ok': False, 'error': 'Commande sans lignes.'}, status=400)
-
         VenteLigne.objects.bulk_create(
             [
                 VenteLigne(
                     vente_id=vente.vente_id,
-                    article_id=l.article_id,
-                    quantite=l.quantite,
-                    prix_unitaire_vente=l.prix_unitaire,
-                    total_ligne=l.total_ligne,
+                    article_id=row['source'].article_id,
+                    quantite=row['quantite'],
+                    prix_unitaire_vente=row['prix_unitaire'],
+                    total_ligne=row['total_ligne'],
                 )
-                for l in lignes_cmd
+                for row in normalized_lines
             ]
         )
 
@@ -241,11 +325,17 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
             )
             lots = list(lots)
             if not lots:
+                transaction.set_rollback(True)
                 return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_id}.'}, status=400)
 
             lot_ids = [x.id for x in lots]
-            exp = DepenseLot.objects.filter(entreprise_id=eid, lot_id__in=lot_ids).values('lot_id').annotate(total=Sum('montant'))
-            exp_map = {e['lot_id']: _d(e['total']) for e in exp}
+            exp_map: dict[int, Decimal] = {}
+            for depense in DepenseLot.objects.filter(entreprise_id=eid, lot_id__in=lot_ids).only('lot_id', 'montant', 'devise'):
+                exp_map[depense.lot_id] = exp_map.get(depense.lot_id, Decimal('0')) + to_primary_amount(
+                    eid,
+                    depense.montant,
+                    depense.devise,
+                )
 
             line_iter = iter(lines_for_article)
             current_line = next(line_iter, None)
@@ -260,10 +350,12 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
                     continue
                 lot.quantite_restante = lot.quantite_restante - take
                 lot.save(update_fields=['quantite_restante'])
+                sync_lot_transit_closure(lot.lot_transit_id)
 
                 exp_total = exp_map.get(lot.id, Decimal('0'))
                 exp_unit = (exp_total / lot.quantite_entree) if lot.quantite_entree else Decimal('0')
                 exp_unit = exp_unit.quantize(Decimal('0.01'))
+                cout_unitaire_achat = to_primary_amount(eid, lot.cout_unitaire_achat, getattr(lot, 'devise', '') or cmd.devise)
 
                 qty_left_from_lot = take
                 while current_line and qty_left_from_lot > 0:
@@ -275,7 +367,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
                             lot_id=lot.id,
                             article_id=article_id,
                             quantite=slice_qty,
-                            cout_unitaire_achat=lot.cout_unitaire_achat,
+                            cout_unitaire_achat=cout_unitaire_achat,
                             cout_unitaire_depenses=exp_unit,
                         )
                     )
@@ -287,6 +379,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
                         remaining_line_qty = current_line.quantite if current_line else Decimal('0')
 
             if remaining_total_qty > 0:
+                transaction.set_rollback(True)
                 return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_id}.'}, status=400)
 
         VenteFifoConsommation.objects.bulk_create(cons_rows)
@@ -296,14 +389,114 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
             entreprise_id=eid,
             client_id=str(cmd.client_id),
             type=ClientSoldeMouvement.Type.DEBIT,
-            montant=cmd.total,
+            montant=total_livre,
             devise=cmd.devise,
             date_mouvement=timezone.now(),
             source_type='vente',
             source_id=vente.vente_id,
         )
 
-        cmd.statut = Commande.Statut.VALIDEE
-        cmd.save(update_fields=['statut'])
-        return JsonResponse({'ok': True, 'vente_id': vente.vente_id, 'type_vente': type_vente}, status=201)
+        for row in normalized_lines:
+            source = row['source']
+            source.quantite = row['quantite']
+            source.prix_unitaire = row['prix_unitaire']
+            source.total_ligne = row['total_ligne']
+            source.save(update_fields=['quantite', 'prix_unitaire', 'total_ligne'])
+        cmd.statut = Commande.Statut.LIVREE
+        cmd.total = total_livre
+        cmd.save(update_fields=['statut', 'total'])
+        nouveau_solde = solde - total_livre_principal
+        return JsonResponse(
+            {
+                'ok': True,
+                'vente_id': vente.vente_id,
+                'type_vente': type_vente,
+                'total_livre': str(total_livre),
+                'solde_client_avant': str(solde),
+                'solde_client_apres': str(nouveau_solde),
+                'devise_principale': get_primary_currency_code(eid),
+            },
+            status=201,
+        )
+
+
+class DettesPaiementsApiListView(CommandesAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
+        qs = ClientDettePaiement.objects.filter(entreprise_id=eid).order_by('-date_soumission', '-id')
+        statut = (request.GET.get('statut') or '').strip()
+        client_id = (request.GET.get('client_id') or '').strip()
+        if statut:
+            qs = qs.filter(statut=statut)
+        if client_id:
+            qs = qs.filter(client_id=client_id)
+        rows, count, page, page_size = _paginate(qs, request)
+        results = [
+            {
+                'id': row.id,
+                'client_id': row.client_id,
+                'caisse_id': row.caisse_id,
+                'montant': str(row.montant),
+                'devise': row.devise,
+                'montant_principal': str(to_primary_amount(eid, row.montant, row.devise)),
+                'devise_principale': get_primary_currency_code(eid),
+                'statut': row.statut,
+                'note_client': row.note_client,
+                'preuve_paiement_url': row.preuve_paiement.url if row.preuve_paiement else '',
+                'date_soumission': row.date_soumission.isoformat(),
+            }
+            for row in rows
+        ]
+        return JsonResponse({'results': results, 'count': count, 'page': page, 'page_size': page_size}, status=200)
+
+
+class DettePaiementConfirmerApiView(CommandesAccessMixin, View):
+    http_method_names = ['post']
+
+    @transaction.atomic
+    def post(self, request, paiement_id: int, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'ok': False, 'error': 'Entreprise active requise.'}, status=400)
+        paiement = ClientDettePaiement.objects.select_for_update().filter(
+            entreprise_id=eid,
+            pk=paiement_id,
+        ).first()
+        if not paiement:
+            return JsonResponse({'ok': False, 'error': 'Paiement introuvable.'}, status=404)
+        if paiement.statut != ClientDettePaiement.Statut.EN_ATTENTE:
+            return JsonResponse({'ok': False, 'error': 'Ce paiement a deja ete traite.'}, status=400)
+
+        dt = timezone.now()
+        MouvementCaisse.objects.create(
+            entreprise_id=eid,
+            caisse_id=paiement.caisse_id,
+            type=MouvementCaisse.Type.ENTREE,
+            montant=paiement.montant,
+            devise=paiement.devise,
+            date_mouvement=dt,
+            libelle=f'Paiement dette client {paiement.client_id}',
+            source_type='dette_client',
+            source_id=str(paiement.pk),
+            created_by_user_id=str(request.user.pk),
+        )
+        ClientSoldeMouvement.objects.create(
+            entreprise_id=eid,
+            client_id=paiement.client_id,
+            type=ClientSoldeMouvement.Type.CREDIT,
+            montant=paiement.montant,
+            devise=paiement.devise,
+            date_mouvement=dt,
+            source_type='paiement_dette',
+            source_id=str(paiement.pk),
+        )
+        paiement.statut = ClientDettePaiement.Statut.CONFIRME
+        paiement.date_confirmation = dt
+        paiement.confirmed_by_user_id = str(request.user.pk)
+        paiement.save(update_fields=['statut', 'date_confirmation', 'confirmed_by_user_id'])
+        return JsonResponse({'ok': True}, status=200)
 

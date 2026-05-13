@@ -5,7 +5,6 @@ services:
       - "8000:8000"
     volumes:
       - .:/cimentapp
-    entrypoint: ["/cimentapp/entrypoint.sh"]
     depends_on:
       db:
         condition: service_healthy

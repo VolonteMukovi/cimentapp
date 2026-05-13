@@ -12,5 +12,7 @@ urlpatterns = [
     path('api/solde/', client_views.ClientSoldeApiView.as_view(), name='client_solde'),
     path('api/transactions/', client_views.ClientTransactionsApiView.as_view(), name='client_transactions_api'),
     path('api/transactions-stats/', client_views.ClientTransactionsStatsApiView.as_view(), name='client_transactions_stats_api'),
+    path('dettes/payer/', client_views.ClientDettePaiementCreateView.as_view(), name='client_dette_paiement_create'),
+    path('api/dettes/paiements/', client_views.ClientDettePaiementsApiView.as_view(), name='client_dette_paiements_api'),
 ]
 

@@ -14,15 +14,14 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . /cimentapp
+COPY requirements.txt /cimentapp/
 
 RUN python -m venv /.venv
 ENV PATH="/.venv/bin:$PATH"
 
-COPY entrypoint.sh /cimentapp/entrypoint.sh
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-RUN pip install --upgrade pip
+COPY . /cimentapp
 
-COPY requirements.txt /cimentapp/
-
-RUN pip install -r requirements.txt
+RUN chmod +x /cimentapp/entrypoint.sh
+ENTRYPOINT ["/cimentapp/entrypoint.sh"]

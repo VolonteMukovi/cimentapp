@@ -7,16 +7,17 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Sum
-from django.db.models.functions import TruncDate
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
+from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
+from articles.models import Devise
 from caisse.models import MouvementCaisse
 from lots.models import DepenseLot, LotStock
+from lots.services import sync_lot_transit_closure
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
-from users.models import User
+from users.models import AffectationEntreprise, Client, User
 from users.navigation import can_access_store_module
 from ventes.models import Vente, VenteFifoConsommation, VenteLigne
 
@@ -71,7 +72,50 @@ class VentesHomeView(VentesAccessMixin, TemplateView):
         ctx['store_module_key'] = 'ventes'
         ctx['store_module_title'] = 'Ventes'
         ctx['MEDIA_URL'] = settings.MEDIA_URL
+        eid = self.entreprise_id()
+        ctx['devise_principale_code'] = get_primary_currency_code(eid)
+        ctx['devises'] = Devise.objects.filter(entreprise_id=eid, actif=True).order_by('-principale', 'code') if eid else []
         return ctx
+
+
+class VentesLookupsApiView(VentesAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request: HttpRequest, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'results': {'clients': [], 'devises': [], 'devise_principale': get_primary_currency_code(None)}})
+
+        client_ids = list(AffectationEntreprise.objects.filter(entreprise_id=eid).values_list('source', flat=True))
+        clients = [
+            {'client_id': c.id, 'nom': c.nom, 'email': c.email or ''}
+            for c in Client.objects.filter(id__in=client_ids).order_by('nom')[:200]
+        ]
+        devises_qs = Devise.objects.filter(entreprise_id=eid, actif=True).order_by('-principale', 'code')
+        devises = [
+            {
+                'code': d.code,
+                'libelle': d.libelle,
+                'principale': d.principale,
+                'taux_vers_principale': str(d.taux_vers_principale),
+            }
+            for d in devises_qs
+        ]
+        if not devises:
+            devises = [{'code': get_primary_currency_code(eid), 'libelle': '', 'principale': True, 'taux_vers_principale': '1'}]
+        return JsonResponse(
+            {
+                'results': {
+                    'clients': clients,
+                    'devises': devises,
+                    'devise_principale': get_primary_currency_code(eid),
+                },
+                'count': len(clients) + len(devises),
+                'page': 1,
+                'page_size': 25,
+            },
+            status=200,
+        )
 
 
 class VentesApiListView(VentesAccessMixin, View):
@@ -102,13 +146,19 @@ class VentesApiListView(VentesAccessMixin, View):
             qs = qs.filter(caisse_id=int(caisse_id))
 
         rows, count, page, page_size = _paginate(qs, request)
+        client_ids = [r.client_id for r in rows if r.client_id]
+        client_names = {c.id: c.nom for c in Client.objects.filter(id__in=client_ids)}
         results = [
             {
                 'vente_id': r.vente_id,
                 'entreprise_id': r.entreprise_id,
                 'client_nom': r.client_nom,
+                'client_id': r.client_id,
+                'client_label': client_names.get(r.client_id) or r.client_nom,
                 'total': str(r.total),
                 'devise': r.devise,
+                'total_principal': str(to_primary_amount(eid, r.total, r.devise)),
+                'devise_principale': get_primary_currency_code(eid),
                 'caisse_id': r.caisse_id,
                 'date_vente': r.date_vente.isoformat(),
             }
@@ -121,9 +171,9 @@ class VenteCreateApiView(VentesAccessMixin, View):
     """
     POST JSON:
     {
-      "client_nom": "Occasionnel",
+      "client_id": "cli_x",
       "caisse_id": 1,
-      "devise": "USD",
+      "devise": "USD",  # optionnel: devise principale si absent
       "date_vente": "2026-04-22T10:00:00",
       "lignes": [{"article_id":"art_x","quantite":"2","prix_unitaire_vente":"10.5"}]
     }
@@ -147,8 +197,19 @@ class VenteCreateApiView(VentesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': 'caisse_id requis.'}, status=400)
         caisse_id = int(caisse_id)
 
-        devise = (payload.get('devise') or 'USD').strip()[:10] or 'USD'
-        client_nom = (payload.get('client_nom') or '').strip()[:255]
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+        client_id = str(payload.get('client_id') or '').strip()[:32]
+        if not client_id:
+            return JsonResponse({'ok': False, 'error': 'client_id requis.'}, status=400)
+        if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
+            return JsonResponse({'ok': False, 'error': 'Client non rattache a cette entreprise.'}, status=400)
+        client = Client.objects.filter(pk=client_id).first()
+        if not client:
+            return JsonResponse({'ok': False, 'error': 'Client introuvable.'}, status=404)
 
         dt_raw = payload.get('date_vente')
         if dt_raw:
@@ -195,7 +256,8 @@ class VenteCreateApiView(VentesAccessMixin, View):
         vente = Vente(
             vente_id=Vente.generate_id(),
             entreprise_id=eid,
-            client_nom=client_nom,
+            client_id=client_id,
+            client_nom=client.nom,
             total=total,
             devise=devise,
             caisse_id=caisse_id,
@@ -240,12 +302,13 @@ class VenteCreateApiView(VentesAccessMixin, View):
 
             # pré-calcul dépenses unitaires par lot (prorata sur qte entrée)
             lot_ids = [x.id for x in lots]
-            expenses = (
-                DepenseLot.objects.filter(entreprise_id=eid, lot_id__in=lot_ids)
-                .values('lot_id')
-                .annotate(total=Sum('montant'))
-            )
-            exp_map = {e['lot_id']: _d(e['total']) for e in expenses}
+            exp_map: dict[int, Decimal] = {}
+            for depense in DepenseLot.objects.filter(entreprise_id=eid, lot_id__in=lot_ids).only('lot_id', 'montant', 'devise'):
+                exp_map[depense.lot_id] = exp_map.get(depense.lot_id, Decimal('0')) + to_primary_amount(
+                    eid,
+                    depense.montant,
+                    depense.devise,
+                )
 
             # consommation: on ventile par lignes mais FIFO s'applique globalement à l'article
             line_iter = iter(lines_for_article)
@@ -263,10 +326,12 @@ class VenteCreateApiView(VentesAccessMixin, View):
                 # mettre à jour stock
                 lot.quantite_restante = (lot.quantite_restante - take)
                 lot.save(update_fields=['quantite_restante'])
+                sync_lot_transit_closure(lot.lot_transit_id)
 
                 exp_total = exp_map.get(lot.id, Decimal('0'))
                 exp_unit = (exp_total / lot.quantite_entree) if lot.quantite_entree else Decimal('0')
                 exp_unit = exp_unit.quantize(Decimal('0.01'))
+                cout_unitaire_achat = to_primary_amount(eid, lot.cout_unitaire_achat, getattr(lot, 'devise', '') or devise)
 
                 # enregistrer la traçabilité pour chaque ligne (dans l'ordre des lignes)
                 qty_left_from_lot = take
@@ -279,7 +344,7 @@ class VenteCreateApiView(VentesAccessMixin, View):
                             lot_id=lot.id,
                             article_id=article_id,
                             quantite=slice_qty,
-                            cout_unitaire_achat=lot.cout_unitaire_achat,
+                            cout_unitaire_achat=cout_unitaire_achat,
                             cout_unitaire_depenses=exp_unit,
                         )
                     )
@@ -301,6 +366,7 @@ class VenteCreateApiView(VentesAccessMixin, View):
             caisse_id=caisse_id,
             type=MouvementCaisse.Type.ENTREE,
             montant=total,
+            devise=devise,
             date_mouvement=dt,
             libelle=f'Encaissement vente {vente.vente_id}',
             source_type='vente',
@@ -342,13 +408,16 @@ class VentesStatsApiView(VentesAccessMixin, View):
             except Exception:
                 pass
 
-        daily = qs.annotate(day=TruncDate('date_vente')).values('day').annotate(ca=Sum('total')).order_by('day')
-        rows = list(daily)
-        results = [
-            {'day': (r['day'].isoformat() if r['day'] else None), 'ca': str(r['ca'] or Decimal('0'))}
-            for r in rows
-        ]
-        total_ca = qs.aggregate(total=Sum('total')).get('total') or Decimal('0')
+        by_day: dict = {}
+        total_ca = Decimal('0')
+        for vente in qs.only('date_vente', 'total', 'devise'):
+            day = vente.date_vente.date() if vente.date_vente else None
+            if not day:
+                continue
+            amount = to_primary_amount(eid, vente.total, vente.devise)
+            by_day[day] = by_day.get(day, Decimal('0')) + amount
+            total_ca += amount
+        results = [{'day': d.isoformat(), 'ca': str(v)} for d, v in sorted(by_day.items(), key=lambda item: item[0])]
         ventes_count = qs.count()
         return JsonResponse(
             {
@@ -356,7 +425,7 @@ class VentesStatsApiView(VentesAccessMixin, View):
                 'count': len(results),
                 'page': 1,
                 'page_size': 25,
-                'stats': {'total_ca': str(total_ca), 'ventes': ventes_count},
+                'stats': {'total_ca': str(total_ca), 'ventes': ventes_count, 'devise_principale': get_primary_currency_code(eid)},
             },
             status=200,
         )

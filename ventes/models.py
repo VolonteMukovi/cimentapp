@@ -10,7 +10,7 @@ class Vente(models.Model):
     vente_id = models.CharField(max_length=32, primary_key=True, editable=False)
     entreprise_id = models.PositiveIntegerField(db_index=True)
 
-    client_nom = models.CharField(max_length=255, blank=True)  # client occasionnel (non enregistré)
+    client_nom = models.CharField(max_length=255, blank=True)  # libelle denormalise du client
     client_id = models.CharField(max_length=32, blank=True, db_index=True)
     commande_id = models.CharField(max_length=32, blank=True, db_index=True)
     type_vente = models.CharField(max_length=10, default='comptant', db_index=True)  # comptant|credit

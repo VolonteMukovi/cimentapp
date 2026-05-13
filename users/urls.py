@@ -26,6 +26,7 @@ urlpatterns = [
     path('magasin/ventes/', include('ventes.urls')),
     path('magasin/commandes/', include('commandes.urls')),
     path('magasin/clients/', include('clients.urls')),
+    path('magasin/fournisseurs/', include('fournisseurs.urls')),
     path('magasin/rapports/', include('rapports.urls')),
     path('activite/', views.ActivityPlaceholderView.as_view(), name='activite'),
     path('compte/', views.AccountView.as_view(), name='compte'),

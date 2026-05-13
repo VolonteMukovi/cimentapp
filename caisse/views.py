@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Case, DecimalField, F, Sum, Value, When
+from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.generic import TemplateView, View
 
+from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
 from caisse.models import CaisseCompte, MouvementCaisse
+from caisse.services import cash_balances_by_caisse, serialize_recent_movements
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
 from users.navigation import can_access_store_module
@@ -158,6 +160,70 @@ class CaisseDeleteApiView(CaisseAccessMixin, View):
         return JsonResponse({'ok': True}, status=200)
 
 
+class CaisseSortieApiView(CaisseAccessMixin, View):
+    http_method_names = ['post']
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'ok': False, 'error': 'Entreprise active requise.'}, status=400)
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
+
+        caisse_id = payload.get('caisse_id')
+        if not str(caisse_id).isdigit():
+            return JsonResponse({'ok': False, 'error': 'caisse_id requis.'}, status=400)
+        caisse_id = int(caisse_id)
+        caisse = CaisseCompte.objects.filter(entreprise_id=eid, id=caisse_id, actif=True).first()
+        if not caisse:
+            return JsonResponse({'ok': False, 'error': 'Sous-compte caisse introuvable ou inactif.'}, status=404)
+
+        try:
+            montant = Decimal(str(payload.get('montant') or '0'))
+        except Exception:
+            montant = Decimal('0')
+        if montant <= 0:
+            return JsonResponse({'ok': False, 'error': 'montant invalide.'}, status=400)
+
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+        motif = str(payload.get('motif') or '').strip()[:255]
+        if not motif:
+            return JsonResponse({'ok': False, 'error': 'motif requis.'}, status=400)
+
+        disponible = cash_balances_by_caisse(eid, caisse_id).get(caisse_id, Decimal('0'))
+        requis = to_primary_amount(eid, montant, devise)
+        if disponible < requis:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': 'Fonds insuffisants sur ce sous-compte.',
+                    'details': {'disponible': str(disponible), 'requis': str(requis), 'devise_principale': get_primary_currency_code(eid)},
+                },
+                status=400,
+            )
+
+        obj = MouvementCaisse.objects.create(
+            entreprise_id=eid,
+            caisse_id=caisse_id,
+            type=MouvementCaisse.Type.SORTIE,
+            montant=montant,
+            devise=devise,
+            date_mouvement=timezone.now(),
+            libelle=motif,
+            source_type='decaissement',
+            source_id='',
+            created_by_user_id=str(request.user.pk),
+        )
+        return JsonResponse({'ok': True, 'id': obj.id}, status=201)
+
+
 class CaisseSoldeApiView(CaisseAccessMixin, View):
     """Solde total + solde par caisse (paginé)."""
 
@@ -167,29 +233,28 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
         eid = self.entreprise_id()
         if eid is None:
             return JsonResponse(
-                {'results': [], 'count': 0, 'page': 1, 'page_size': 25, 'stats': {'total': '0.00'}},
+                {
+                    'results': [],
+                    'count': 0,
+                    'page': 1,
+                    'page_size': 25,
+                    'stats': {
+                        'total': '0.00',
+                        'situation_nette': '0.00',
+                        'devise_principale': get_primary_currency_code(None),
+                    },
+                },
                 status=200,
             )
 
-        # solde par caisse = somme(ENTREE) - somme(SORTIE)
-        signed = Case(
-            When(type=MouvementCaisse.Type.ENTREE, then=F('montant')),
-            When(type=MouvementCaisse.Type.SORTIE, then=F('montant') * Value(Decimal('-1'))),
-            default=Value(Decimal('0')),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        )
-        base = (
-            MouvementCaisse.objects.filter(entreprise_id=eid)
-            .values('caisse_id')
-            .annotate(solde=Sum(signed))
-            .order_by('-caisse_id')
-        )
-
         caisse_id = (request.GET.get('caisse_id') or '').strip()
+        selected_caisse_id = int(caisse_id) if caisse_id.isdigit() else None
+        balances = cash_balances_by_caisse(eid, selected_caisse_id)
+        base = sorted(balances.items(), key=lambda item: item[0], reverse=True)
         if caisse_id.isdigit():
-            base = base.filter(caisse_id=int(caisse_id))
+            base = [item for item in base if item[0] == int(caisse_id)]
 
-        count = base.count()
+        count = len(base)
         try:
             page = int(request.GET.get('page') or 1)
         except Exception:
@@ -206,21 +271,32 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
             page_size = 200
 
         offset = (page - 1) * page_size
-        rows = list(base[offset : offset + page_size])
-        caisse_ids = [r['caisse_id'] for r in rows]
+        rows = base[offset : offset + page_size]
+        caisse_ids = [cid for cid, _solde in rows]
         names = {x.id: x.nom for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)}
 
         results = [
             {
-                'caisse_id': r['caisse_id'],
-                'nom': names.get(r['caisse_id'], ''),
-                'solde': str(r['solde'] or Decimal('0')),
+                'caisse_id': cid,
+                'nom': names.get(cid, ''),
+                'solde': str(solde or Decimal('0')),
+                'devise_principale': get_primary_currency_code(eid),
             }
-            for r in rows
+            for cid, solde in rows
         ]
-        total = base.aggregate(total=Sum('solde')).get('total') or Decimal('0')
+        total = sum((solde for _cid, solde in base), Decimal('0'))
         return JsonResponse(
-            {'results': results, 'count': count, 'page': page, 'page_size': page_size, 'stats': {'total': str(total)}},
+            {
+                'results': results,
+                'count': count,
+                'page': page,
+                'page_size': page_size,
+                'stats': {
+                    'total': str(total),
+                    'situation_nette': str(total),
+                    'devise_principale': get_primary_currency_code(eid),
+                },
+            },
             status=200,
         )
 
@@ -234,32 +310,61 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
         eid = self.entreprise_id()
         if eid is None:
             return JsonResponse(
-                {'results': [], 'count': 0, 'page': 1, 'page_size': 25, 'stats': {'total': '0.00'}},
+                {
+                    'results': [],
+                    'count': 0,
+                    'page': 1,
+                    'page_size': 25,
+                    'stats': {'total': '0.00', 'devise_principale': get_primary_currency_code(None)},
+                },
                 status=200,
             )
 
-        signed = Case(
-            When(type=MouvementCaisse.Type.ENTREE, then=F('montant')),
-            When(type=MouvementCaisse.Type.SORTIE, then=F('montant') * Value(Decimal('-1'))),
-            default=Value(Decimal('0')),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        )
-        base = (
-            MouvementCaisse.objects.filter(entreprise_id=eid)
-            .values('caisse_id')
-            .annotate(solde=Sum(signed))
-            .order_by('-solde', '-caisse_id')
-        )
-        rows = list(base[:50])
-        caisse_ids = [r['caisse_id'] for r in rows]
+        balances = cash_balances_by_caisse(eid)
+        rows = sorted(balances.items(), key=lambda item: (item[1], item[0]), reverse=True)[:50]
+        caisse_ids = [cid for cid, _solde in rows]
         names = {x.id: x.nom for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)}
         results = [
-            {'caisse_id': r['caisse_id'], 'nom': names.get(r['caisse_id'], ''), 'solde': str(r['solde'] or Decimal('0'))}
-            for r in rows
+            {
+                'caisse_id': cid,
+                'nom': names.get(cid, ''),
+                'solde': str(solde or Decimal('0')),
+                'devise_principale': get_primary_currency_code(eid),
+            }
+            for cid, solde in rows
         ]
-        total = base.aggregate(total=Sum('solde')).get('total') or Decimal('0')
+        total = sum(balances.values(), Decimal('0'))
         return JsonResponse(
-            {'results': results, 'count': len(results), 'page': 1, 'page_size': 25, 'stats': {'total': str(total)}},
+            {
+                'results': results,
+                'count': len(results),
+                'page': 1,
+                'page_size': 25,
+                'stats': {'total': str(total), 'devise_principale': get_primary_currency_code(eid)},
+            },
+            status=200,
+        )
+
+
+class CaisseRecentMouvementsApiView(CaisseAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, caisse_id: int, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'results': [], 'count': 0, 'devise_principale': get_primary_currency_code(None)}, status=200)
+        caisse = CaisseCompte.objects.filter(entreprise_id=eid, id=caisse_id).first()
+        if not caisse:
+            return JsonResponse({'ok': False, 'error': 'Caisse introuvable.'}, status=404)
+        results = serialize_recent_movements(eid, caisse_id, limit=10)
+        return JsonResponse(
+            {
+                'ok': True,
+                'caisse': {'id': caisse.id, 'nom': caisse.nom},
+                'results': results,
+                'count': len(results),
+                'devise_principale': get_primary_currency_code(eid),
+            },
             status=200,
         )
 

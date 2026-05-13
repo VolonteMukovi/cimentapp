@@ -30,7 +30,7 @@
       <div class="p-5">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ a.article_id }}</p>
         <p class="mt-1 text-base font-bold text-black">{{ a.nom }}</p>
-        <p class="mt-1 text-sm text-slate-700">Prix catalogue: <span class="font-semibold">{{ a.prix_catalogue }}</span> USD</p>
+        <p class="mt-1 text-sm text-slate-700">Prix catalogue: <span class="font-semibold">{{ a.prix_catalogue }}</span> {{ devise_principale_code }}</p>
         <a href="{% url 'client_order_create' %}?article_id={{ a.article_id }}" class="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900">Réserver</a>
       </div>
     </section>

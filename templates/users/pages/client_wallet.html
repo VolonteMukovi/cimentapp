@@ -33,7 +33,8 @@
     fetch('/fr/client/commandes/api/stats/', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
       .then(function(data){
-        document.getElementById('wallet-total').textContent = (data.stats && data.stats.total) ? (data.stats.total + ' USD') : '0.00 USD';
+        var currency = (data.stats && data.stats.devise_principale) ? data.stats.devise_principale : 'USD';
+        document.getElementById('wallet-total').textContent = (data.stats && data.stats.total) ? (data.stats.total + ' ' + currency) : ('0.00 ' + currency);
         document.getElementById('wallet-meta').textContent = (data.stats && data.stats.commandes != null) ? (data.stats.commandes + ' commandes') : '';
         var labels = (data.results || []).map(function(r){ return r.day; });
         var values = (data.results || []).map(function(r){ return parseFloat(r.total || '0') || 0; });
