@@ -2,3 +2,4 @@ Django>=5.2,<6
 mysqlclient
 python-dotenv
 Pillow>=10,<12
+gunicorn
