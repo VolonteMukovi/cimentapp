@@ -11,5 +11,7 @@ urlpatterns = [
     path('api/clients/<str:client_id>/stats/', views.ClientStatsApiView.as_view(), name='api_client_stats'),
     path('api/clients/<str:client_id>/ventes/', views.ClientVentesApiView.as_view(), name='api_client_ventes'),
     path('api/clients/<str:client_id>/crediter/', views.ClientCrediterApiView.as_view(), name='api_client_crediter'),
+    path('api/clients/<str:client_id>/dettes/paiements/', views.ClientDettePaiementsApiView.as_view(), name='api_client_dette_paiements'),
+    path('api/clients/<str:client_id>/dettes/paiements/<int:paiement_id>/confirmer/', views.ClientDettePaiementConfirmerApiView.as_view(), name='api_client_dette_paiement_confirmer'),
 ]
 
