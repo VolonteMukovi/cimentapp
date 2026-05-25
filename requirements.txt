@@ -3,3 +3,4 @@ mysqlclient
 python-dotenv
 Pillow>=10,<12
 gunicorn
+whitenoise>=6.0.0
