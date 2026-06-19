@@ -51,6 +51,7 @@
       <h2 class="text-base font-bold text-black">Lots enregistrés</h2>
       <button id="refresh-lots" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">Actualiser</button>
     </div>
+    <input id="lots-search" type="search" placeholder="Rechercher lot ou fournisseur" class="mt-3 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
     <div id="lots-list" class="mt-4 space-y-2"></div>
   </section>
 {% endblock %}
@@ -174,7 +175,8 @@
       });
   }
   function fetchLots(){
-    fetch('/magasin/lots/api/lots-transit/?'+qs({page:1,page_size:30}), { headers: { 'Accept': 'application/json' }})
+    var q = (document.getElementById('lots-search').value || '').trim();
+    fetch('/magasin/lots/api/lots-transit/?'+qs({page:1,page_size:30,q:q}), { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); }).then(function(data){
         var wrap = document.getElementById('lots-list');
         wrap.innerHTML = '';
@@ -210,6 +212,11 @@
   document.getElementById('add-article-row').addEventListener('click', function(e){ e.preventDefault(); addArticleRow(); });
   document.getElementById('add-fee-row').addEventListener('click', function(e){ e.preventDefault(); addFeeRow(); });
   document.getElementById('refresh-lots').addEventListener('click', function(){ fetchLots(); fetchStats(); });
+  var lotsSearchTimer = null;
+  document.getElementById('lots-search').addEventListener('input', function(){
+    clearTimeout(lotsSearchTimer);
+    lotsSearchTimer = setTimeout(fetchLots, 250);
+  });
   document.getElementById('save-lot-transit').addEventListener('click', function(){
     var msg = document.getElementById('lot-msg');
     msg.textContent = 'Validation en cours...';

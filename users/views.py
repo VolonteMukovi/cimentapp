@@ -10,9 +10,9 @@ from django.utils import timezone
 from django.views.generic import FormView, ListView, RedirectView, TemplateView
 from django.views.generic.edit import CreateView
 
-from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
-from users.forms import AppAuthenticationForm, EntrepriseForm, SignupForm
-from users.models import AffectationEntreprise, Entreprise, User
+from users.constants import SESSION_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
+from users.forms import AppAuthenticationForm, ClientLoginForm, EntrepriseForm, SignupForm
+from users.models import AffectationEntreprise, Client, Entreprise, User
 from users.navigation import staff_nav_for_user
 
 
@@ -29,6 +29,48 @@ class AppLoginView(LoginView):
     template_name = 'users/pages/login.html'
     authentication_form = AppAuthenticationForm
     redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx['client_form'] = kwargs.get('client_form') or ClientLoginForm()
+        ctx['login_mode'] = self.request.POST.get('account_type') or self.request.GET.get('mode') or 'entreprise'
+        return ctx
+
+    def post(self, request, *args, **kwargs):
+        if request.POST.get('account_type') != 'client':
+            request.session.pop(SESSION_CLIENT_ID, None)
+            request.session.pop(SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, None)
+            return super().post(request, *args, **kwargs)
+
+        client_form = ClientLoginForm(request.POST)
+        if client_form.is_valid():
+            email = client_form.cleaned_data['email']
+            password = client_form.cleaned_data['password']
+            client = Client.objects.filter(email__iexact=email).first()
+            if client and client.check_portal_password(password):
+                request.session[SESSION_CLIENT_ID] = client.pk
+                request.session.pop(SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, None)
+                links = AffectationEntreprise.objects.filter(source=client.pk)
+                count = links.count()
+                if count == 0:
+                    client_form.add_error(None, 'Aucune entreprise associee a ce compte.')
+                elif count > 1:
+                    return redirect('client_entreprise_select')
+                else:
+                    request.session[SESSION_CLIENT_ACTIVE_ENTREPRISE_ID] = links.values_list(
+                        'entreprise_id',
+                        flat=True,
+                    ).first()
+                    messages.success(request, 'Bienvenue sur votre espace client.')
+                    return redirect('client_portal_home')
+            else:
+                client_form.add_error(None, 'E-mail ou mot de passe incorrect.')
+
+        form = self.get_form()
+        return self.render_to_response(
+            self.get_context_data(form=form, client_form=client_form),
+            status=400,
+        )
 
     def get_success_url(self):
         return str(reverse_lazy('dashboard'))
@@ -237,11 +279,17 @@ class DashboardView(LoginRequiredMixin, TemplateView):
             and (user.is_admin_role() or user.is_superadmin_role())
         )
         if can_invite_client:
+            active_entreprise = Entreprise.objects.filter(pk=int(eid)).first()
             ctx['client_invite_absolute_url'] = self.request.build_absolute_uri(
-                reverse('register_client', kwargs={'entreprise_id': int(eid)}),
+                reverse(
+                    'register_client_invitation',
+                    kwargs={'invitation_code': active_entreprise.invitation_code},
+                ),
             )
+            ctx['client_invitation_code'] = active_entreprise.invitation_code
         else:
             ctx['client_invite_absolute_url'] = ''
+            ctx['client_invitation_code'] = ''
         return ctx
 
 

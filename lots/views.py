@@ -7,7 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
@@ -633,6 +633,9 @@ class LotTransitApiListView(LotsAccessMixin, View):
         if eid is None:
             return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
         qs = LotTransit.objects.filter(entreprise_id=eid).order_by('-date_creation', '-id')
+        q = (request.GET.get('q') or '').strip()
+        if q:
+            qs = qs.filter(Q(reference__icontains=q) | Q(fournisseur__icontains=q))
         statut = (request.GET.get('statut') or '').strip()
         if statut:
             qs = qs.filter(statut=statut)

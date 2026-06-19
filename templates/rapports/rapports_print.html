@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rapport financier détaillé</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e5e7eb; color: #111827; font: 12px/1.4 Arial, sans-serif; }
+    .toolbar { display: flex; justify-content: center; gap: 8px; padding: 14px; }
+    .button { border: 1px solid #111827; border-radius: 5px; background: #fff; padding: 9px 13px; color: #111827; font-weight: 700; cursor: pointer; }
+    .button-primary { background: #111827; color: #fff; }
+    .document { width: min(210mm, calc(100% - 20px)); min-height: 297mm; margin: 0 auto 20px; background: #fff; padding: 15mm; }
+    .header { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #111827; padding-bottom: 12px; }
+    .company-name { font-size: 20px; font-weight: 800; }
+    .muted { color: #64748b; }
+    h1 { margin: 20px 0 4px; font-size: 20px; }
+    .criteria { margin-top: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .criterion { border: 1px solid #d1d5db; padding: 8px; }
+    .label { display: block; color: #64748b; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+    .value { display: block; margin-top: 2px; font-weight: 700; overflow-wrap: anywhere; }
+    .kpis { margin-top: 14px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .kpi { border: 1px solid #d1d5db; padding: 9px; }
+    .kpi-value { margin-top: 4px; font-size: 15px; font-weight: 800; }
+    table { width: 100%; margin-top: 18px; border-collapse: collapse; }
+    th { border-bottom: 2px solid #111827; padding: 7px 5px; text-align: left; font-size: 9px; text-transform: uppercase; }
+    td { border-bottom: 1px solid #d1d5db; padding: 7px 5px; vertical-align: top; }
+    .num { text-align: right; white-space: nowrap; }
+    .positive { color: #166534; font-weight: 700; }
+    .negative { color: #b91c1c; font-weight: 700; }
+    .empty { margin-top: 18px; border: 1px dashed #9ca3af; padding: 30px; text-align: center; color: #64748b; }
+    .footer { margin-top: 18px; border-top: 1px solid #d1d5db; padding-top: 8px; color: #64748b; font-size: 9px; }
+    @media (max-width: 640px) {
+      .document { min-height: auto; padding: 18px; }
+      .header { display: block; }
+      .criteria, .kpis { grid-template-columns: 1fr 1fr; }
+      .table-wrap { overflow-x: auto; }
+      table { min-width: 760px; }
+    }
+    @media print {
+      @page { size: A4 landscape; margin: 8mm; }
+      body { background: #fff; }
+      .toolbar { display: none; }
+      .document { width: auto; min-height: 0; margin: 0; padding: 0; }
+      thead { display: table-header-group; }
+      tr { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="button button-primary" type="button" onclick="window.print()">Imprimer</button>
+    <button class="button" type="button" onclick="window.close()">Fermer</button>
+  </div>
+
+  <main class="document">
+    <header class="header">
+      <div>
+        <div class="company-name">{{ entreprise.nom|default:"CimentApp" }}</div>
+        {% if entreprise.adresse %}<div class="muted">{{ entreprise.adresse }}</div>{% endif %}
+        {% if entreprise.telephone %}<div class="muted">Tél. {{ entreprise.telephone }}</div>{% endif %}
+      </div>
+      <div>
+        <span class="label">Document généré le</span>
+        <span class="value">{% now "d/m/Y H:i" %}</span>
+      </div>
+    </header>
+
+    <h1>Rapport financier détaillé</h1>
+    <p class="muted">Rentabilité calculée à partir des ventes et des coûts FIFO.</p>
+
+    <section class="criteria">
+      <div class="criterion"><span class="label">Date début</span><span class="value">{{ date_from|default:"Toutes" }}</span></div>
+      <div class="criterion"><span class="label">Date fin</span><span class="value">{{ date_to|default:"Toutes" }}</span></div>
+      <div class="criterion"><span class="label">Recherche</span><span class="value">{{ q|default:"Aucun filtre" }}</span></div>
+    </section>
+
+    <section class="kpis">
+      <div class="kpi"><span class="label">Chiffre d'affaires</span><div id="print-ca" class="kpi-value">—</div></div>
+      <div class="kpi"><span class="label">Coût FIFO</span><div id="print-cogs" class="kpi-value">—</div></div>
+      <div class="kpi"><span class="label">Bénéfice net</span><div id="print-benef" class="kpi-value">—</div></div>
+      <div class="kpi"><span class="label">Marge nette</span><div id="print-margin" class="kpi-value">—</div></div>
+    </section>
+
+    <div id="print-loading" class="empty">Chargement du rapport...</div>
+    <div id="print-empty" class="empty" hidden>Aucune donnée ne correspond aux critères sélectionnés.</div>
+
+    <div id="print-table-wrap" class="table-wrap" hidden>
+      <table>
+        <thead>
+          <tr>
+            <th>Lot</th>
+            <th>Article</th>
+            <th>Quantité</th>
+            <th class="num">CA</th>
+            <th class="num">Coût FIFO</th>
+            <th class="num">Bénéfice</th>
+            <th class="num">Marge</th>
+          </tr>
+        </thead>
+        <tbody id="print-tbody"></tbody>
+      </table>
+    </div>
+
+    <footer class="footer">
+      Rapport généré par CimentApp selon les critères affichés ci-dessus.
+    </footer>
+  </main>
+
+  <script>
+  (function () {
+    var filters = {
+      date_from: '{{ date_from|escapejs }}',
+      date_to: '{{ date_to|escapejs }}',
+      q: '{{ q|escapejs }}'
+    };
+
+    function query(params) {
+      return Object.keys(params).filter(function(key) { return params[key] !== ''; })
+        .map(function(key) { return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]); }).join('&');
+    }
+    function number(v) {
+      var n = parseFloat(String(v || '0'));
+      return isNaN(n) ? 0 : n;
+    }
+    function money(v) {
+      return number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function escapeHtml(v) {
+      return String(v || '').replace(/[&<>"']/g, function(ch) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+      });
+    }
+
+    function fetchAllRows(page) {
+      return fetch('/magasin/rapports/api/benefices-par-lot/?' + query({
+        page: page,
+        page_size: 200,
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        q: filters.q
+      }), { headers: { Accept: 'application/json' }}).then(function(r) {
+        return r.json();
+      }).then(function(data) {
+        var rows = data.results || [];
+        if (page * data.page_size < data.count) {
+          return fetchAllRows(page + 1).then(function(nextRows) { return rows.concat(nextRows); });
+        }
+        return rows;
+      });
+    }
+
+    Promise.all([
+      fetchAllRows(1),
+      fetch('/magasin/rapports/api/stats/?' + query({
+        date_from: filters.date_from,
+        date_to: filters.date_to,
+        q: filters.q
+      }), { headers: { Accept: 'application/json' }}).then(function(r) { return r.json(); })
+    ]).then(function(res) {
+      var rows = res[0];
+      var stats = res[1].stats || {};
+      var ca = number(stats.total_ca);
+      var cogs = number(stats.total_cogs);
+      var benefit = number(stats.total_benef);
+      var margin = ca ? (benefit / ca) * 100 : 0;
+      var currency = stats.devise_principale || '';
+
+      document.getElementById('print-ca').textContent = money(ca) + ' ' + currency;
+      document.getElementById('print-cogs').textContent = money(cogs) + ' ' + currency;
+      document.getElementById('print-benef').textContent = money(benefit) + ' ' + currency;
+      document.getElementById('print-benef').className = 'kpi-value ' + (benefit < 0 ? 'negative' : 'positive');
+      document.getElementById('print-margin').textContent = margin.toFixed(2) + '%';
+
+      document.getElementById('print-loading').hidden = true;
+      document.getElementById('print-empty').hidden = rows.length > 0;
+      document.getElementById('print-table-wrap').hidden = rows.length === 0;
+      var tbody = document.getElementById('print-tbody');
+      rows.forEach(function(row) {
+        var benefitRow = number(row.benefice_estime);
+        var tone = benefitRow < 0 ? 'negative' : 'positive';
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>' + escapeHtml(row.lot_reference) + '</td>' +
+          '<td><strong>' + escapeHtml(row.article_nom) + '</strong><br><span class="muted">' + escapeHtml(row.article_id) + '</span></td>' +
+          '<td>' + escapeHtml(row.quantite_vendue_fifo) + ' ' + escapeHtml(row.unite) + '</td>' +
+          '<td class="num">' + money(row.chiffre_affaires) + ' ' + currency + '</td>' +
+          '<td class="num">' + money(row.cout_total_fifo) + ' ' + currency + '</td>' +
+          '<td class="num ' + tone + '">' + money(row.benefice_estime) + ' ' + currency + '</td>' +
+          '<td class="num ' + tone + '">' + money(row.marge_pourcentage) + '%</td>';
+        tbody.appendChild(tr);
+      });
+    }).catch(function() {
+      document.getElementById('print-loading').textContent = 'Impossible de charger le rapport.';
+    });
+  })();
+  </script>
+</body>
+</html>

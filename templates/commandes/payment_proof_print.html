@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RECU</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #ececec; color: #000; }
+    body { font-family: "Courier New", Courier, monospace; font-size: 12px; line-height: 1.3; }
+    .toolbar { display: flex; justify-content: center; gap: 8px; padding: 12px; }
+    .toolbar button {
+      border: 1px solid #111;
+      border-radius: 4px;
+      background: #fff;
+      padding: 9px 12px;
+      color: #111;
+      font: 700 13px Arial, sans-serif;
+      cursor: pointer;
+    }
+    .toolbar .primary { background: #111; color: #fff; }
+    .ticket {
+      width: 80mm;
+      min-height: 100mm;
+      margin: 0 auto 16px;
+      padding: 5mm 4mm;
+      background: #fff;
+    }
+    .title { margin: 0 0 8px; text-align: center; font-size: 15px; text-transform: uppercase; }
+    .company { margin-bottom: 8px; text-align: center; }
+    .company-name { font-size: 15px; font-weight: 700; text-transform: uppercase; overflow-wrap: anywhere; }
+    .company-detail { margin-top: 2px; font-size: 11px; overflow-wrap: anywhere; }
+    .separator { margin: 7px 0; border-top: 1px dashed #000; }
+    .row { display: flex; justify-content: space-between; gap: 8px; margin: 3px 0; }
+    .row .label { flex: 0 0 34%; }
+    .row .value { min-width: 0; flex: 1; text-align: right; font-weight: 700; overflow-wrap: anywhere; }
+    .products-title { margin: 8px 0 4px; font-weight: 700; text-transform: uppercase; }
+    .product { padding: 5px 0; border-bottom: 1px dotted #777; }
+    .product-name { font-weight: 700; overflow-wrap: anywhere; }
+    .product-detail { display: flex; justify-content: space-between; gap: 6px; margin-top: 2px; }
+    .total { margin-top: 8px; font-size: 14px; font-weight: 700; }
+    @media (max-width: 360px) {
+      .ticket { width: 100%; margin-bottom: 0; }
+    }
+    @media print {
+      @page { size: 80mm auto; margin: 0; }
+      html, body { width: 80mm; background: #fff; }
+      .toolbar { display: none; }
+      .ticket { width: 80mm; min-height: 0; margin: 0; padding: 4mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button type="button" class="primary" onclick="window.print()">Imprimer</button>
+    <button type="button" onclick="window.close()">Fermer</button>
+  </div>
+
+  <main class="ticket">
+    <header class="company">
+      <div class="company-name">{{ entreprise.nom|default:"Entreprise" }}</div>
+      {% if entreprise.adresse %}<div class="company-detail">{{ entreprise.adresse }}</div>{% endif %}
+      {% if entreprise.telephone %}<div class="company-detail">Tel: {{ entreprise.telephone }}</div>{% endif %}
+    </header>
+    <div class="separator"></div>
+    <h1 class="title">Preuve de paiement</h1>
+    <div class="separator"></div>
+
+    <div class="row">
+      <span class="label">Client</span>
+      <span class="value">{{ client.nom|default:payment.client_id }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Date</span>
+      <span class="value">{{ vente.date_vente|default:date_operation|date:"d/m/Y H:i" }}</span>
+    </div>
+    <div class="row">
+      <span class="label">Caisse</span>
+      <span class="value">{{ caisse.nom|default:"Non renseigne" }}</span>
+    </div>
+
+    <div class="separator"></div>
+    <div class="products-title">Produits</div>
+
+    {% for produit in produits %}
+      <div class="product">
+        <div class="product-name">{{ produit.nom }}</div>
+        <div class="product-detail">
+          <span>{{ produit.quantite }} {{ produit.unite }}</span>
+          <span>PU {{ produit.prix_unitaire }} {{ vente.devise }}</span>
+        </div>
+      </div>
+    {% empty %}
+      <div class="product">Aucun produit renseigne.</div>
+    {% endfor %}
+
+    <div class="separator"></div>
+    <div class="row total">
+      <span>Total facture</span>
+      <span>{{ vente.total|default:montant }} {{ vente.devise|default:devise }}</span>
+    </div>
+  </main>
+</body>
+</html>

@@ -7,6 +7,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
@@ -127,6 +128,16 @@ class VentesApiListView(VentesAccessMixin, View):
             return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
 
         qs = Vente.objects.filter(entreprise_id=eid).order_by('-date_vente', '-vente_id')
+        q = (request.GET.get('q') or '').strip()
+        if q:
+            matching_clients = Client.objects.filter(
+                Q(id__icontains=q) | Q(nom__icontains=q) | Q(email__icontains=q)
+            ).values_list('id', flat=True)
+            qs = qs.filter(
+                Q(vente_id__icontains=q)
+                | Q(client_nom__icontains=q)
+                | Q(client_id__in=matching_clients)
+            )
 
         dt_from = request.GET.get('date_from')
         dt_to = request.GET.get('date_to')
@@ -203,13 +214,19 @@ class VenteCreateApiView(VentesAccessMixin, View):
             return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
 
         client_id = str(payload.get('client_id') or '').strip()[:32]
-        if not client_id:
-            return JsonResponse({'ok': False, 'error': 'client_id requis.'}, status=400)
-        if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
-            return JsonResponse({'ok': False, 'error': 'Client non rattache a cette entreprise.'}, status=400)
-        client = Client.objects.filter(pk=client_id).first()
-        if not client:
-            return JsonResponse({'ok': False, 'error': 'Client introuvable.'}, status=404)
+        client_nom_libre = str(payload.get('client_nom') or '').strip()[:255]
+        client = None
+        if client_id:
+            if not AffectationEntreprise.objects.filter(entreprise_id=eid, source=client_id).exists():
+                return JsonResponse({'ok': False, 'error': 'Client non rattache a cette entreprise.'}, status=400)
+            client = Client.objects.filter(pk=client_id).first()
+            if not client:
+                return JsonResponse({'ok': False, 'error': 'Client introuvable.'}, status=404)
+            client_nom = client.nom
+        else:
+            if not client_nom_libre:
+                return JsonResponse({'ok': False, 'error': 'Client requis: choisir un client ou saisir un client non abonne.'}, status=400)
+            client_nom = client_nom_libre
 
         dt_raw = payload.get('date_vente')
         if dt_raw:
@@ -257,7 +274,7 @@ class VenteCreateApiView(VentesAccessMixin, View):
             vente_id=Vente.generate_id(),
             entreprise_id=eid,
             client_id=client_id,
-            client_nom=client.nom,
+            client_nom=client_nom,
             total=total,
             devise=devise,
             caisse_id=caisse_id,

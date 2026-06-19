@@ -30,7 +30,13 @@
   </section>
 
   <section class="app-surface-card p-5 sm:p-6">
-    <h2 class="text-base font-bold text-black">Liste</h2>
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <h2 class="text-base font-bold text-black">Liste</h2>
+      <form method="get" class="flex w-full gap-2 sm:max-w-md">
+        <input name="q" value="{{ q }}" type="search" placeholder="Produit, commande ou statut" class="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <button class="rounded-xl bg-black px-3 py-2 text-sm font-semibold text-white" type="submit">Rechercher</button>
+      </form>
+    </div>
     <div class="mt-4 space-y-3">
       {% for o in orders %}
       <div class="rounded-2xl border border-slate-200 bg-white p-4">
@@ -39,9 +45,40 @@
           <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{{ o.get_statut_display }}</span>
         </div>
         <div class="mt-2 flex items-center justify-between text-sm">
-          <p class="text-slate-600">Total</p>
+          <p class="text-slate-600">Unites commandees</p>
+          <p class="font-semibold tabular-nums text-black">{{ o.client_total_unites|default:"0" }}</p>
+        </div>
+        <div class="mt-2 space-y-1 rounded-xl bg-slate-50 px-3 py-2">
+          {% for line in o.client_lignes %}
+            <div class="flex items-center justify-between gap-2 text-xs">
+              <span class="min-w-0 truncate font-semibold text-slate-700">{{ line.client_article_nom }}</span>
+              <span class="shrink-0 font-semibold tabular-nums text-black">{{ line.quantite }} {{ line.client_unite_mesure }}</span>
+            </div>
+            {% if o.statut == "livree" %}
+              <div class="flex items-center justify-between gap-2 text-xs text-slate-600">
+                <span>Prix unitaire</span>
+                <span class="font-semibold tabular-nums text-black">{{ line.prix_unitaire }} {{ o.devise }}</span>
+              </div>
+            {% endif %}
+          {% empty %}
+            <p class="text-xs text-slate-500">Aucune ligne.</p>
+          {% endfor %}
+        </div>
+        <div class="mt-2 flex items-center justify-between text-sm">
+          <p class="text-slate-600">Total facture</p>
           <p class="font-semibold tabular-nums text-black">{{ o.total }} {{ o.devise }}</p>
         </div>
+        {% if o.statut == "livree" %}
+        <div class="mt-2 grid gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs sm:grid-cols-2">
+          <p class="text-slate-600">Cout achat reel: <span class="font-semibold text-black">{{ o.client_cout_achat_reel }} {{ o.devise }}</span></p>
+          <p class="text-slate-600">Credit accorde: <span class="font-semibold text-black">{{ o.client_credit_accorde }} {{ o.devise }}</span></p>
+        </div>
+        {% endif %}
+        {% if o.client_vente_creee %}
+          <a href="{% url 'client_commande_preuve' commande_id=o.commande_id %}" target="_blank" rel="noopener" class="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-black sm:w-auto">
+            Voir / imprimer la preuve de paiement
+          </a>
+        {% endif %}
         <p class="mt-2 text-xs text-slate-500">Date: {{ o.date_commande|date:"Y-m-d H:i" }}</p>
       </div>
       {% empty %}

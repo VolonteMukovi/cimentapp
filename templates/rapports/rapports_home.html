@@ -1,52 +1,97 @@
 {% extends "base_app.html" %}
-{% block title %}Rapports — CimentApp{% endblock %}
+{% block title %}Rapports - CimentApp{% endblock %}
 
 {% block content %}
-  <section class="app-surface-card overflow-hidden p-6 sm:p-7">
-    <h1 class="text-2xl font-bold tracking-tight text-black">Rapports</h1>
-    <p class="mt-1 text-sm text-slate-600">Bénéfices par lot (FIFO), vue globale et filtres par période.</p>
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-black">Rapports financiers</h1>
+        <p class="mt-1 text-sm text-slate-600">Rentabilité réelle selon les ventes et les coûts FIFO.</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button id="rep-print" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-black">Imprimer</button>
+        <button id="rep-refresh" type="button" class="rounded-xl bg-black px-3 py-2 text-xs font-semibold text-white hover:bg-slate-900">Actualiser</button>
+      </div>
+    </div>
 
-    <div class="mt-5 grid gap-3 sm:grid-cols-2">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtre</p>
-        <div class="mt-2 grid grid-cols-2 gap-2">
-          <input id="date-from" placeholder="date_from (ISO)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
-          <input id="date-to" placeholder="date_to (ISO)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
-        </div>
-        <button id="rep-refresh" class="mt-3 rounded-2xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-900">Actualiser</button>
-        <p id="rep-msg" class="mt-2 text-xs text-slate-600"></p>
-      </div>
-      <div class="rounded-2xl border border-slate-200 bg-black p-4 text-white">
-        <p class="text-xs font-semibold uppercase tracking-wide text-white/60">Note</p>
-        <p class="mt-2 text-sm text-white/80">Les bénéfices sont calculés à partir du coût FIFO (achat + dépenses unitaires) et du prix de vente saisi.</p>
-      </div>
+    <div class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+      <input id="report-search" type="search" placeholder="Lot, article, fournisseur" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none lg:col-span-2">
+      <input id="date-from" type="date" aria-label="Date de début" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+      <input id="date-to" type="date" aria-label="Date de fin" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+      <select id="quick-period" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <option value="">Période personnalisée</option>
+        <option value="today">Aujourd'hui</option>
+        <option value="week">7 derniers jours</option>
+        <option value="month">Ce mois</option>
+        <option value="year">Cette année</option>
+      </select>
+    </div>
+    <p id="rep-msg" class="mt-2 text-xs text-slate-600"></p>
+  </section>
+
+  <section class="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
+    <div class="app-surface-card p-4">
+      <p class="text-[10px] font-semibold uppercase text-slate-500">Chiffre d'affaires</p>
+      <p id="kpi-ca" class="mt-2 text-xl font-bold tabular-nums text-black">0.00</p>
+      <p class="report-currency mt-1 text-xs text-slate-500"></p>
+    </div>
+    <div class="app-surface-card p-4">
+      <p class="text-[10px] font-semibold uppercase text-slate-500">Coût FIFO</p>
+      <p id="kpi-cogs" class="mt-2 text-xl font-bold tabular-nums text-black">0.00</p>
+      <p class="report-currency mt-1 text-xs text-slate-500"></p>
+    </div>
+    <div class="app-surface-card p-4">
+      <p class="text-[10px] font-semibold uppercase text-slate-500">Bénéfice net</p>
+      <p id="kpi-benef" class="mt-2 text-xl font-bold tabular-nums text-black">0.00</p>
+      <p class="report-currency mt-1 text-xs text-slate-500"></p>
+    </div>
+    <div class="app-surface-card p-4">
+      <p class="text-[10px] font-semibold uppercase text-slate-500">Marge nette</p>
+      <p id="kpi-margin" class="mt-2 text-xl font-bold tabular-nums text-black">0.00%</p>
+      <p class="mt-1 text-xs text-slate-500">Bénéfice / CA</p>
     </div>
   </section>
 
   <section class="app-surface-card p-5 sm:p-6">
     <div class="flex items-center justify-between gap-3">
-      <h2 class="text-base font-bold text-black">Bénéfices par lot</h2>
+      <div>
+        <h2 class="text-base font-bold text-black">Évolution financière</h2>
+        <p class="mt-1 text-xs text-slate-500">Chiffre d'affaires, coûts et bénéfice par jour.</p>
+      </div>
     </div>
-    <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Bénéfice (sur la page)</p>
-      <canvas id="rep-chart" height="140" aria-label="Graphique bénéfice par lot"></canvas>
+    <div class="mt-4 h-72 w-full">
+      <canvas id="rep-chart" aria-label="Évolution financière"></canvas>
     </div>
-    <div class="mt-4 overflow-x-auto">
+  </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex items-center justify-between gap-3">
+      <h2 class="text-base font-bold text-black">Rentabilité par lot</h2>
+      <span id="rep-count" class="text-xs font-semibold text-slate-500">0 résultat</span>
+    </div>
+
+    <div id="report-empty" class="mt-4 hidden rounded-xl border border-dashed border-slate-300 px-4 py-10 text-center text-sm text-slate-500">
+      Aucune donnée ne correspond aux filtres sélectionnés.
+    </div>
+
+    <div class="mt-4 hidden overflow-x-auto md:block">
       <table class="min-w-full text-left text-sm">
-        <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <thead class="border-b border-slate-200 text-xs font-semibold uppercase text-slate-500">
           <tr>
-            <th class="py-2 pr-4">Lot</th>
-            <th class="py-2 pr-4">Article</th>
-            <th class="py-2 pr-4">Qté</th>
-            <th class="py-2 pr-4">CA</th>
-            <th class="py-2 pr-4">Coût FIFO</th>
-            <th class="py-2 pr-4">Bénéfice</th>
+            <th class="py-3 pr-4">Lot</th>
+            <th class="py-3 pr-4">Article</th>
+            <th class="py-3 pr-4">Quantité</th>
+            <th class="py-3 pr-4">CA</th>
+            <th class="py-3 pr-4">Coût</th>
+            <th class="py-3 pr-4">Bénéfice</th>
+            <th class="py-3 text-right">Marge</th>
           </tr>
         </thead>
         <tbody id="rep-tbody" class="divide-y divide-slate-100"></tbody>
       </table>
     </div>
-    <div class="mt-3 text-xs text-slate-600" id="rep-pager">—</div>
+    <div id="rep-mobile" class="mt-4 space-y-3 md:hidden"></div>
+    <div class="mt-4 text-xs text-slate-600" id="rep-pager">—</div>
   </section>
 {% endblock %}
 
@@ -55,73 +100,164 @@
 <script>
 (function () {
   var page = 1;
-  var pageSize = 25;
-  var benefChart = null;
+  var pageSize = 50;
+  var chart = null;
+  var searchTimer = null;
 
-  function qs(params) {
-    return Object.keys(params).filter(function(k){ return params[k] !== '' && params[k] != null; })
-      .map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+  function number(v) {
+    var n = parseFloat(String(v || '0'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function money(v) {
+    return number(v).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function escapeHtml(v) {
+    return String(v || '').replace(/[&<>"']/g, function(ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function query(params) {
+    return Object.keys(params).filter(function(key) { return params[key] !== ''; })
+      .map(function(key) { return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]); }).join('&');
+  }
+
+  function iso(date) {
+    return date.toISOString().slice(0, 10);
+  }
+
+  function applyQuickPeriod(value) {
+    if (!value) return;
+    var today = new Date();
+    var start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (value === 'week') start.setDate(start.getDate() - 6);
+    if (value === 'month') start = new Date(today.getFullYear(), today.getMonth(), 1);
+    if (value === 'year') start = new Date(today.getFullYear(), 0, 1);
+    document.getElementById('date-from').value = iso(start);
+    document.getElementById('date-to').value = iso(today);
+    page = 1;
+    fetchReport();
+  }
+
+  function renderKpis(stats) {
+    var s = stats.stats || {};
+    var ca = number(s.total_ca);
+    var cogs = number(s.total_cogs);
+    var benefit = number(s.total_benef);
+    var margin = ca ? (benefit / ca) * 100 : 0;
+    var currency = s.devise_principale || '';
+    document.getElementById('kpi-ca').textContent = money(ca);
+    document.getElementById('kpi-cogs').textContent = money(cogs);
+    document.getElementById('kpi-benef').textContent = money(benefit);
+    document.getElementById('kpi-benef').className = 'mt-2 text-xl font-bold tabular-nums ' + (benefit < 0 ? 'text-red-700' : 'text-emerald-700');
+    document.getElementById('kpi-margin').textContent = margin.toFixed(2) + '%';
+    document.querySelectorAll('.report-currency').forEach(function(el) { el.textContent = currency; });
+  }
+
+  function renderRows(data) {
+    var rows = data.results || [];
+    var tbody = document.getElementById('rep-tbody');
+    var mobile = document.getElementById('rep-mobile');
+    var empty = document.getElementById('report-empty');
+    tbody.innerHTML = '';
+    mobile.innerHTML = '';
+    empty.classList.toggle('hidden', rows.length > 0);
+    document.getElementById('rep-count').textContent = data.count + (data.count > 1 ? ' résultats' : ' résultat');
+
+    rows.forEach(function(row) {
+      var benefit = number(row.benefice_estime);
+      var tone = benefit < 0 ? 'text-red-700' : 'text-emerald-700';
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="py-3 pr-4 font-semibold text-black">' + escapeHtml(row.lot_reference) + '</td>' +
+        '<td class="py-3 pr-4"><p class="font-semibold text-black">' + escapeHtml(row.article_nom) + '</p><p class="font-mono text-[10px] text-slate-400">' + escapeHtml(row.article_id) + '</p></td>' +
+        '<td class="py-3 pr-4 tabular-nums">' + escapeHtml(row.quantite_vendue_fifo) + ' ' + escapeHtml(row.unite) + '</td>' +
+        '<td class="py-3 pr-4 tabular-nums">' + money(row.chiffre_affaires) + '</td>' +
+        '<td class="py-3 pr-4 tabular-nums">' + money(row.cout_total_fifo) + '</td>' +
+        '<td class="py-3 pr-4 font-semibold tabular-nums ' + tone + '">' + money(benefit) + '</td>' +
+        '<td class="py-3 text-right font-semibold tabular-nums ' + tone + '">' + money(row.marge_pourcentage) + '%</td>';
+      tbody.appendChild(tr);
+
+      var card = document.createElement('article');
+      card.className = 'rounded-xl border border-slate-200 bg-white p-3';
+      card.innerHTML =
+        '<div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="truncate font-semibold text-black">' + escapeHtml(row.article_nom) + '</p><p class="text-xs text-slate-500">' + escapeHtml(row.lot_reference) + '</p></div><p class="shrink-0 font-semibold ' + tone + '">' + money(row.benefice_estime) + '</p></div>' +
+        '<div class="mt-3 grid grid-cols-2 gap-2 text-xs"><p class="text-slate-500">Quantité<br><span class="font-semibold text-black">' + escapeHtml(row.quantite_vendue_fifo) + ' ' + escapeHtml(row.unite) + '</span></p><p class="text-slate-500">Marge<br><span class="font-semibold ' + tone + '">' + money(row.marge_pourcentage) + '%</span></p><p class="text-slate-500">CA<br><span class="font-semibold text-black">' + money(row.chiffre_affaires) + '</span></p><p class="text-slate-500">Coût<br><span class="font-semibold text-black">' + money(row.cout_total_fifo) + '</span></p></div>';
+      mobile.appendChild(card);
+    });
+    document.getElementById('rep-pager').textContent = 'Page ' + data.page + ' - ' + rows.length + ' / ' + data.count;
+  }
+
+  function renderChart(stats) {
+    var rows = stats.results || [];
+    var canvas = document.getElementById('rep-chart');
+    if (!canvas || !window.Chart) return;
+    if (chart) chart.destroy();
+    chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: rows.map(function(row) { return row.day; }),
+        datasets: [
+          { label: "Chiffre d'affaires", data: rows.map(function(row) { return number(row.ca); }), borderColor: '#111827', backgroundColor: '#111827', tension: 0.25 },
+          { label: 'Coût FIFO', data: rows.map(function(row) { return number(row.cogs); }), borderColor: '#64748b', backgroundColor: '#64748b', tension: 0.25 },
+          { label: 'Bénéfice', data: rows.map(function(row) { return number(row.benefice); }), borderColor: '#15803d', backgroundColor: '#15803d', tension: 0.25 }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'bottom' } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { grid: { color: 'rgba(148,163,184,.22)' } }
+        }
+      }
+    });
   }
 
   function fetchReport() {
-    var df = (document.getElementById('date-from').value || '').trim();
-    var dt = (document.getElementById('date-to').value || '').trim();
-    var url = '/magasin/rapports/api/benefices-par-lot/?' + qs({ page: page, page_size: pageSize, date_from: df, date_to: dt });
-    var statsUrl = '/magasin/rapports/api/stats/?' + qs({ date_from: df, date_to: dt });
-    document.getElementById('rep-msg').textContent = '';
+    var params = {
+      page: page,
+      page_size: pageSize,
+      date_from: document.getElementById('date-from').value,
+      date_to: document.getElementById('date-to').value,
+      q: document.getElementById('report-search').value.trim()
+    };
+    document.getElementById('rep-msg').textContent = 'Chargement...';
     return Promise.all([
-      fetch(url, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
-      fetch(statsUrl, { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
-    ]).then(function(res){
-        var data = res[0];
-        var stats = res[1];
-        var tb = document.getElementById('rep-tbody');
-        tb.innerHTML = '';
-        (data.results || []).forEach(function (r) {
-          var tr = document.createElement('tr');
-          tr.innerHTML =
-            '<td class="py-2 pr-4 font-semibold text-black">#' + r.lot_id + '</td>' +
-            '<td class="py-2 pr-4 font-mono text-xs text-slate-700">' + r.article_id + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums">' + r.quantite_vendue_fifo + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.chiffre_affaires + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums">' + r.cout_total_fifo + '</td>' +
-            '<td class="py-2 pr-4 tabular-nums font-semibold">' + r.benefice_estime + '</td>';
-          tb.appendChild(tr);
-        });
-        document.getElementById('rep-pager').textContent =
-          'Page ' + data.page + ' — ' + (data.results || []).length + ' / ' + data.count;
-
-        var canvas = document.getElementById('rep-chart');
-        if (canvas && window.Chart) {
-          if (benefChart) benefChart.destroy();
-          var labels = (stats.results || []).map(function(r){ return r.day; });
-          var values = (stats.results || []).map(function(r){ return parseFloat(r.benefice || '0') || 0; });
-          benefChart = new Chart(canvas.getContext('2d'), {
-            type: 'bar',
-            data: { labels: labels, datasets: [{ label: 'Bénéfice', data: values, backgroundColor: 'rgba(0,0,0,0.85)' }] },
-            options: {
-              responsive: true,
-              plugins: { legend: { display: false } },
-              scales: {
-                x: { ticks: { color: '#475569' }, grid: { display: false } },
-                y: { ticks: { color: '#475569' }, grid: { color: 'rgba(148,163,184,0.25)' } }
-              }
-            }
-          });
-        }
-    }).catch(function(){
-        document.getElementById('rep-pager').textContent = 'Erreur de chargement.';
-      });
+      fetch('/magasin/rapports/api/benefices-par-lot/?' + query(params), { headers: { Accept: 'application/json' }}).then(function(r) { return r.json(); }),
+      fetch('/magasin/rapports/api/stats/?' + query({ date_from: params.date_from, date_to: params.date_to, q: params.q }), { headers: { Accept: 'application/json' }}).then(function(r) { return r.json(); })
+    ]).then(function(res) {
+      renderRows(res[0]);
+      renderKpis(res[1]);
+      renderChart(res[1]);
+      document.getElementById('rep-msg').textContent = '';
+    }).catch(function() {
+      document.getElementById('rep-msg').textContent = 'Impossible de charger le rapport.';
+    });
   }
 
-  document.getElementById('rep-refresh').addEventListener('click', function (e) {
-    e.preventDefault();
-    page = 1;
-    fetchReport();
+  document.getElementById('rep-refresh').addEventListener('click', function() { page = 1; fetchReport(); });
+  document.getElementById('rep-print').addEventListener('click', function() {
+    var params = query({
+      date_from: document.getElementById('date-from').value,
+      date_to: document.getElementById('date-to').value,
+      q: document.getElementById('report-search').value.trim()
+    });
+    window.open('/magasin/rapports/imprimer/?' + params, '_blank', 'noopener');
+  });
+  document.getElementById('quick-period').addEventListener('change', function() { applyQuickPeriod(this.value); });
+  document.getElementById('date-from').addEventListener('change', function() { page = 1; fetchReport(); });
+  document.getElementById('date-to').addEventListener('change', function() { page = 1; fetchReport(); });
+  document.getElementById('report-search').addEventListener('input', function() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function() { page = 1; fetchReport(); }, 250);
   });
 
   fetchReport();
 })();
 </script>
 {% endblock %}
-

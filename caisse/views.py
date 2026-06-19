@@ -83,6 +83,9 @@ class CaisseApiListView(CaisseAccessMixin, View):
                 'id': r.id,
                 'entreprise_id': r.entreprise_id,
                 'nom': r.nom,
+                'banque_nom': r.banque_nom,
+                'compte_intitule': r.compte_intitule,
+                'numero_compte': r.numero_compte,
                 'actif': r.actif,
                 'created_by_user_id': r.created_by_user_id,
                 'date_creation': r.date_creation.isoformat(),
@@ -106,11 +109,17 @@ class CaisseCreateApiView(CaisseAccessMixin, View):
         nom = (payload.get('nom') or '').strip()[:120]
         if not nom:
             return JsonResponse({'ok': False, 'error': 'nom requis.'}, status=400)
+        banque_nom = (payload.get('banque_nom') or '').strip()[:120]
+        compte_intitule = (payload.get('compte_intitule') or '').strip()[:180]
+        numero_compte = (payload.get('numero_compte') or '').strip()[:80]
         actif = payload.get('actif')
         actif = bool(actif) if actif is not None else True
         obj = CaisseCompte.objects.create(
             entreprise_id=eid,
             nom=nom,
+            banque_nom=banque_nom,
+            compte_intitule=compte_intitule,
+            numero_compte=numero_compte,
             actif=actif,
             created_by_user_id=str(request.user.pk),
         )
@@ -137,6 +146,13 @@ class CaisseUpdateApiView(CaisseAccessMixin, View):
             if not nom:
                 return JsonResponse({'ok': False, 'error': 'nom invalide.'}, status=400)
             obj.nom = nom
+        for field, max_len in (
+            ('banque_nom', 120),
+            ('compte_intitule', 180),
+            ('numero_compte', 80),
+        ):
+            if field in payload:
+                setattr(obj, field, str(payload.get(field) or '').strip()[:max_len])
         actif = payload.get('actif')
         if actif is not None:
             obj.actif = bool(actif)
@@ -158,6 +174,58 @@ class CaisseDeleteApiView(CaisseAccessMixin, View):
         obj.actif = False
         obj.save(update_fields=['actif'])
         return JsonResponse({'ok': True}, status=200)
+
+
+class CaisseEntreeApiView(CaisseAccessMixin, View):
+    http_method_names = ['post']
+
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        eid = self.entreprise_id()
+        if eid is None:
+            return JsonResponse({'ok': False, 'error': 'Entreprise active requise.'}, status=400)
+        try:
+            payload = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
+
+        caisse_id = payload.get('caisse_id')
+        if not str(caisse_id).isdigit():
+            return JsonResponse({'ok': False, 'error': 'caisse_id requis.'}, status=400)
+        caisse_id = int(caisse_id)
+        caisse = CaisseCompte.objects.filter(entreprise_id=eid, id=caisse_id, actif=True).first()
+        if not caisse:
+            return JsonResponse({'ok': False, 'error': 'Sous-compte caisse introuvable ou inactif.'}, status=404)
+
+        try:
+            montant = Decimal(str(payload.get('montant') or '0'))
+        except Exception:
+            montant = Decimal('0')
+        if montant <= 0:
+            return JsonResponse({'ok': False, 'error': 'montant invalide.'}, status=400)
+
+        try:
+            devise = resolve_transaction_currency(eid, payload.get('devise'))
+        except ValueError as exc:
+            return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+        motif = str(payload.get('motif') or '').strip()[:255]
+        if not motif:
+            return JsonResponse({'ok': False, 'error': 'motif requis.'}, status=400)
+
+        obj = MouvementCaisse.objects.create(
+            entreprise_id=eid,
+            caisse_id=caisse_id,
+            type=MouvementCaisse.Type.ENTREE,
+            montant=montant,
+            devise=devise,
+            date_mouvement=timezone.now(),
+            libelle=motif,
+            source_type='encaissement',
+            source_id='',
+            created_by_user_id=str(request.user.pk),
+        )
+        return JsonResponse({'ok': True, 'id': obj.id}, status=201)
 
 
 class CaisseSortieApiView(CaisseAccessMixin, View):
@@ -273,12 +341,18 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
         offset = (page - 1) * page_size
         rows = base[offset : offset + page_size]
         caisse_ids = [cid for cid, _solde in rows]
-        names = {x.id: x.nom for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)}
+        caisses = {
+            x.id: x
+            for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)
+        }
 
         results = [
             {
                 'caisse_id': cid,
-                'nom': names.get(cid, ''),
+                'nom': caisses.get(cid).nom if caisses.get(cid) else '',
+                'banque_nom': caisses.get(cid).banque_nom if caisses.get(cid) else '',
+                'compte_intitule': caisses.get(cid).compte_intitule if caisses.get(cid) else '',
+                'numero_compte': caisses.get(cid).numero_compte if caisses.get(cid) else '',
                 'solde': str(solde or Decimal('0')),
                 'devise_principale': get_primary_currency_code(eid),
             }
@@ -315,7 +389,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
                     'count': 0,
                     'page': 1,
                     'page_size': 25,
-                    'stats': {'total': '0.00', 'devise_principale': get_primary_currency_code(None)},
+                    'stats': {'total': '0.00', 'situation_nette': '0.00', 'devise_principale': get_primary_currency_code(None)},
                 },
                 status=200,
             )
@@ -323,11 +397,17 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
         balances = cash_balances_by_caisse(eid)
         rows = sorted(balances.items(), key=lambda item: (item[1], item[0]), reverse=True)[:50]
         caisse_ids = [cid for cid, _solde in rows]
-        names = {x.id: x.nom for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)}
+        caisses = {
+            x.id: x
+            for x in CaisseCompte.objects.filter(entreprise_id=eid, id__in=caisse_ids)
+        }
         results = [
             {
                 'caisse_id': cid,
-                'nom': names.get(cid, ''),
+                'nom': caisses.get(cid).nom if caisses.get(cid) else '',
+                'banque_nom': caisses.get(cid).banque_nom if caisses.get(cid) else '',
+                'compte_intitule': caisses.get(cid).compte_intitule if caisses.get(cid) else '',
+                'numero_compte': caisses.get(cid).numero_compte if caisses.get(cid) else '',
                 'solde': str(solde or Decimal('0')),
                 'devise_principale': get_primary_currency_code(eid),
             }
@@ -340,7 +420,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
                 'count': len(results),
                 'page': 1,
                 'page_size': 25,
-                'stats': {'total': str(total), 'devise_principale': get_primary_currency_code(eid)},
+                'stats': {'total': str(total), 'situation_nette': str(total), 'devise_principale': get_primary_currency_code(eid)},
             },
             status=200,
         )

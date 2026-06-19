@@ -12,12 +12,26 @@ from users.forms import ClientLoginForm, RegisterClientForm
 from users.models import AffectationEntreprise, Client, Entreprise
 
 
+class UnifiedClientLoginRedirectView(View):
+    http_method_names = ['get', 'post']
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.session.get(SESSION_CLIENT_ID):
+            return redirect('client_portal_home')
+        return redirect('/accounts/login/?mode=client')
+
+
 class RegisterClientView(FormView):
     template_name = 'users/pages/register_client.html'
     form_class = RegisterClientForm
 
     def dispatch(self, request, *args, **kwargs):
-        self.entreprise = Entreprise.objects.filter(pk=kwargs['entreprise_id']).first()
+        invitation_code = str(kwargs.get('invitation_code') or '').strip().upper()
+        entreprise_id = kwargs.get('entreprise_id')
+        if invitation_code:
+            self.entreprise = Entreprise.objects.filter(invitation_code__iexact=invitation_code).first()
+        else:
+            self.entreprise = Entreprise.objects.filter(pk=entreprise_id).first()
         if not self.entreprise:
             return render(
                 request,
@@ -70,6 +84,25 @@ class RegisterClientView(FormView):
                     'Compte client créé. Vous pouvez vous connecter.',
                 )
         return redirect('client_login')
+
+
+class InvitationCodeView(View):
+    template_name = 'users/pages/invitation_code.html'
+    http_method_names = ['get', 'post']
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, {})
+
+    def post(self, request, *args, **kwargs):
+        code = str(request.POST.get('invitation_code') or '').strip().upper()
+        if not code:
+            messages.error(request, "Saisissez le code d'invitation.")
+            return render(request, self.template_name, {'invitation_code': code}, status=400)
+        entreprise = Entreprise.objects.filter(invitation_code__iexact=code).first()
+        if not entreprise:
+            messages.error(request, "Ce code d'invitation est invalide.")
+            return render(request, self.template_name, {'invitation_code': code}, status=404)
+        return redirect('register_client_invitation', invitation_code=entreprise.invitation_code)
 
 
 class ClientLoginView(FormView):

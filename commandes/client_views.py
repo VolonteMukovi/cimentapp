@@ -5,17 +5,19 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.db import transaction
-from django.http import JsonResponse
+from django.db.models import Q
+from django.http import Http404, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.generic import ListView, View
 
 from articles.currency import get_primary_currency_code, to_primary_amount
-from articles.models import Article
+from articles.models import Article, Unite
 from caisse.models import CaisseCompte
 from commandes.models import ClientDettePaiement, ClientSoldeMouvement, Commande, CommandeLigne
 from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
-from users.models import Client
+from users.models import Client, Entreprise
+from ventes.models import Vente, VenteFifoConsommation, VenteLigne
 
 
 class ClientPortalRequiredMixin:
@@ -41,10 +43,147 @@ class ClientOrdersView(ClientPortalRequiredMixin, ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        return Commande.objects.filter(
+        qs = Commande.objects.filter(
             entreprise_id=self.entreprise_id,
             client_id=str(self.client.pk),
-        ).order_by('-date_commande', '-commande_id')
+        )
+        q = (self.request.GET.get('q') or '').strip()
+        if q:
+            article_ids = Article.objects.filter(
+                entreprise_id=self.entreprise_id,
+                nom__icontains=q,
+            ).values_list('article_id', flat=True)
+            matching_commands = CommandeLigne.objects.filter(
+                Q(article_id__in=article_ids) | Q(article_id__icontains=q)
+            ).values_list('commande_id', flat=True)
+            qs = qs.filter(Q(commande_id__icontains=q) | Q(statut__icontains=q) | Q(commande_id__in=matching_commands))
+        return qs.order_by('-date_commande', '-commande_id')
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        orders = list(ctx.get('orders') or [])
+        commande_ids = [o.commande_id for o in orders]
+        lignes_by_cmd: dict[str, list[CommandeLigne]] = {}
+        for line in CommandeLigne.objects.filter(commande_id__in=commande_ids).order_by('id'):
+            lignes_by_cmd.setdefault(line.commande_id, []).append(line)
+        article_ids = sorted({line.article_id for lines in lignes_by_cmd.values() for line in lines})
+        articles = {
+            article.article_id: article
+            for article in Article.objects.filter(entreprise_id=self.entreprise_id, article_id__in=article_ids).only(
+                'article_id',
+                'nom',
+                'unite_id',
+            )
+        }
+        unite_ids = sorted({article.unite_id for article in articles.values()})
+        unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'code', 'libelle')}
+
+        ventes_by_cmd = {
+            v.commande_id: v
+            for v in Vente.objects.filter(entreprise_id=self.entreprise_id, commande_id__in=commande_ids).only(
+                'vente_id',
+                'commande_id',
+                'total',
+                'devise',
+            )
+        }
+        vente_ids = [v.vente_id for v in ventes_by_cmd.values()]
+        cost_by_vente: dict[str, Decimal] = {}
+        for c in VenteFifoConsommation.objects.filter(vente_id__in=vente_ids).only(
+            'vente_id',
+            'quantite',
+            'cout_unitaire_achat',
+            'cout_unitaire_depenses',
+        ):
+            unit_cost = (c.cout_unitaire_achat or Decimal('0')) + (c.cout_unitaire_depenses or Decimal('0'))
+            cost_by_vente[c.vente_id] = cost_by_vente.get(c.vente_id, Decimal('0')) + (c.quantite * unit_cost)
+
+        for order in orders:
+            lines = lignes_by_cmd.get(order.commande_id, [])
+            for line in lines:
+                article = articles.get(line.article_id)
+                unite = unites.get(article.unite_id) if article else None
+                line.client_article_nom = article.nom if article else line.article_id
+                line.client_unite_mesure = (unite.libelle or unite.code) if unite else 'unite(s)'
+            vente = ventes_by_cmd.get(order.commande_id)
+            order.client_vente_creee = bool(vente)
+            order.client_lignes = lines
+            order.client_total_unites = sum((line.quantite for line in lines), Decimal('0'))
+            order.client_cout_achat_reel = (cost_by_vente.get(vente.vente_id, Decimal('0')).quantize(Decimal('0.01')) if vente else Decimal('0'))
+            order.client_credit_accorde = Decimal('0')
+            if vente:
+                depot = order.depot_montant or Decimal('0')
+                credit = (vente.total or Decimal('0')) - depot
+                order.client_credit_accorde = credit.quantize(Decimal('0.01')) if credit > 0 else Decimal('0')
+        ctx['orders'] = orders
+        ctx['object_list'] = orders
+        ctx['q'] = (self.request.GET.get('q') or '').strip()
+        return ctx
+
+
+class ClientCommandePreuveView(ClientPortalRequiredMixin, View):
+    template_name = 'commandes/payment_proof_print.html'
+    http_method_names = ['get']
+
+    def get(self, request, commande_id: str, *args, **kwargs):
+        commande = Commande.objects.filter(
+            entreprise_id=self.entreprise_id,
+            client_id=str(self.client.pk),
+            commande_id=commande_id,
+        ).first()
+        if not commande:
+            raise Http404('Commande introuvable.')
+        vente = Vente.objects.filter(entreprise_id=self.entreprise_id, commande_id=commande.commande_id).first()
+        if not vente:
+            raise Http404('La preuve sera disponible apres creation de la vente.')
+        caisse = (
+            CaisseCompte.objects.filter(entreprise_id=self.entreprise_id, pk=commande.caisse_id).first()
+            if commande.caisse_id
+            else None
+        )
+        vente_lignes = list(VenteLigne.objects.filter(vente_id=vente.vente_id).order_by('id'))
+        article_ids = [line.article_id for line in vente_lignes]
+        articles = {
+            article.article_id: article
+            for article in Article.objects.filter(
+                entreprise_id=self.entreprise_id,
+                article_id__in=article_ids,
+            ).only('article_id', 'nom', 'unite_id')
+        }
+        unite_ids = [article.unite_id for article in articles.values()]
+        unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
+        produits = []
+        for line in vente_lignes:
+            article = articles.get(line.article_id)
+            unite = unites.get(article.unite_id) if article else None
+            produits.append(
+                {
+                    'nom': article.nom if article else line.article_id,
+                    'quantite': line.quantite,
+                    'unite': (unite.libelle or unite.code) if unite else '',
+                    'prix_unitaire': line.prix_unitaire_vente,
+                }
+            )
+        return render(
+            request,
+            self.template_name,
+            {
+                'entreprise': Entreprise.objects.filter(pk=self.entreprise_id).first(),
+                'client': self.client,
+                'caisse': caisse,
+                'payment': commande,
+                'vente': vente,
+                'produits': produits,
+                'proof_type': 'commande',
+                'reference': commande.commande_id,
+                'montant': commande.depot_montant,
+                'devise': commande.devise,
+                'statut': commande.get_paiement_statut_display(),
+                'date_operation': commande.date_commande,
+                'note': commande.note_client,
+                'preuve_url': commande.preuve_paiement.url if commande.preuve_paiement else '',
+            },
+        )
 
 
 class ClientOrderCreateView(ClientPortalRequiredMixin, View):
@@ -240,7 +379,16 @@ class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
         ]
 
         caisses_qs = CaisseCompte.objects.filter(entreprise_id=self.entreprise_id, actif=True).order_by('nom')[:200]
-        caisses = [{'id': c.id, 'nom': c.nom} for c in caisses_qs]
+        caisses = [
+            {
+                'id': c.id,
+                'nom': c.nom,
+                'banque_nom': c.banque_nom,
+                'compte_intitule': c.compte_intitule,
+                'numero_compte': c.numero_compte,
+            }
+            for c in caisses_qs
+        ]
 
         return JsonResponse(
             {

@@ -203,6 +203,7 @@ class Client(models.Model):
 class Entreprise(models.Model):
     """Création / fiche entreprise (tenant ou société cliente du SaaS)."""
 
+    invitation_code = models.CharField(max_length=16, unique=True, editable=False, db_index=True)
     nom = models.CharField(max_length=255)
     secteur = models.CharField(max_length=255)
     pays = models.CharField(max_length=100)
@@ -230,6 +231,21 @@ class Entreprise(models.Model):
 
     def __str__(self):
         return self.nom
+
+    @staticmethod
+    def generate_invitation_code() -> str:
+        alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+        for _ in range(100):
+            token = ''.join(secrets.choice(alphabet) for _ in range(6))
+            candidate = f'ENT-{token}'
+            if not Entreprise.objects.filter(invitation_code=candidate).exists():
+                return candidate
+        raise RuntimeError("Impossible de generer un code d'invitation unique.")
+
+    def save(self, *args, **kwargs):
+        if not self.invitation_code:
+            self.invitation_code = self.generate_invitation_code()
+        super().save(*args, **kwargs)
 
 
 class AffectationEntreprise(models.Model):

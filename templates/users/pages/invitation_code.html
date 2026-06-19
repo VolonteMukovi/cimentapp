@@ -1,0 +1,18 @@
+{% extends "base_auth.html" %}
+{% block title %}Code d'invitation - CimentApp{% endblock %}
+{% block content %}
+  <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Rejoindre une entreprise</h1>
+  <p class="mt-2 text-sm text-slate-600">Saisissez le code transmis par l'entreprise pour créer ou rattacher votre compte client.</p>
+  <form method="post" class="mt-8 space-y-5">
+    {% csrf_token %}
+    <div>
+      <label for="invitation-code" class="block text-sm font-medium text-slate-700">Code d'invitation</label>
+      <input id="invitation-code" name="invitation_code" value="{{ invitation_code|default:'' }}" autocomplete="one-time-code" autocapitalize="characters" placeholder="ENT-XXXXXX" class="mt-1 block w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center font-mono text-base font-bold uppercase tracking-wider text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-black focus:outline-none focus:ring-2 focus:ring-black/10" required>
+    </div>
+    <button type="submit" class="w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-neutral-800">Continuer</button>
+  </form>
+  <p class="mt-8 text-center text-sm text-slate-600">
+    Vous avez déjà un compte ?
+    <a href="{% url 'login' %}?mode=client" class="font-semibold text-black underline underline-offset-2">Se connecter</a>
+  </p>
+{% endblock %}
