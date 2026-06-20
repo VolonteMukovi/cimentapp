@@ -3,8 +3,10 @@ from django.urls import include, path
 from users import client_views, store_views, views
 
 urlpatterns = [
+    path('fr/invitation/', client_views.InvitationCodeView.as_view(), name='invitation_code'),
+    path('fr/invitation/<str:invitation_code>/', client_views.RegisterClientView.as_view(), name='register_client_invitation'),
     path('fr/register-client/<int:entreprise_id>/', client_views.RegisterClientView.as_view(), name='register_client'),
-    path('fr/client/login/', client_views.ClientLoginView.as_view(), name='client_login'),
+    path('fr/client/login/', client_views.UnifiedClientLoginRedirectView.as_view(), name='client_login'),
     path('fr/client/logout/', client_views.ClientLogoutView.as_view(), name='client_logout'),
     path('fr/client/catalogue/', client_views.ClientCatalogView.as_view(), name='client_catalogue'),
     path('fr/client/commandes/', include('commandes.client_urls')),

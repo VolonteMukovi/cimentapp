@@ -1,31 +1,90 @@
 {% extends "base_auth.html" %}
-{% block title %}Connexion — CimentApp{% endblock %}
+{% block title %}Connexion - CimentApp{% endblock %}
 {% block content %}
   <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Connexion</h1>
-  <p class="mt-2 text-sm text-slate-600">Accédez à votre espace de gestion.</p>
-  <form method="post" action="{% url 'login' %}" class="mt-8 space-y-5">
-    {% csrf_token %}
-    {% if form.non_field_errors %}
-      <div class="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-        {{ form.non_field_errors }}
+  <p class="mt-2 text-sm text-slate-600">Accédez à votre espace entreprise ou à votre portail client.</p>
+
+  <div class="mt-6 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1" role="tablist">
+    <button type="button" data-login-tab="entreprise" class="login-tab rounded-lg px-3 py-2.5 text-sm font-semibold">Entreprise</button>
+    <button type="button" data-login-tab="client" class="login-tab rounded-lg px-3 py-2.5 text-sm font-semibold">Client</button>
+  </div>
+
+  <section data-login-panel="entreprise">
+    <form method="post" action="{% url 'login' %}" class="mt-6 space-y-5">
+      {% csrf_token %}
+      <input type="hidden" name="account_type" value="entreprise">
+      {% if login_mode == "entreprise" and form.non_field_errors %}
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <div>
+        <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.username.label }}</label>
+        {{ form.username }}
+        {{ form.username.errors }}
       </div>
-    {% endif %}
-    <div>
-      <label for="{{ form.username.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.username.label }}</label>
-      {{ form.username }}
-      {{ form.username.errors }}
-    </div>
-    <div>
-      <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password.label }}</label>
-      {{ form.password }}
-      {{ form.password.errors }}
-    </div>
-    <button type="submit" class="w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md transition hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-black/25 focus:ring-offset-2">
-      Se connecter
-    </button>
-  </form>
-  <p class="mt-8 text-center text-sm text-slate-600">
-    Pas encore de compte ?
-    <a href="{% url 'signup' %}" class="font-semibold text-black underline decoration-slate-300 underline-offset-2 hover:decoration-black">Créer un compte</a>
-  </p>
+      <div>
+        <label for="{{ form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.password.label }}</label>
+        {{ form.password }}
+        {{ form.password.errors }}
+      </div>
+      <button type="submit" class="w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-neutral-800">Se connecter comme entreprise</button>
+    </form>
+    <p class="mt-6 text-center text-sm text-slate-600">
+      Nouvelle entreprise ?
+      <a href="{% url 'signup' %}" class="font-semibold text-black underline underline-offset-2">Créer un compte</a>
+    </p>
+  </section>
+
+  <section data-login-panel="client">
+    <form method="post" action="{% url 'login' %}" class="mt-6 space-y-5">
+      {% csrf_token %}
+      <input type="hidden" name="account_type" value="client">
+      {% if client_form.non_field_errors %}
+        <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{ client_form.non_field_errors }}</div>
+      {% endif %}
+      <div>
+        <label for="{{ client_form.email.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ client_form.email.label }}</label>
+        {{ client_form.email }}
+        {{ client_form.email.errors }}
+      </div>
+      <div>
+        <label for="{{ client_form.password.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ client_form.password.label }}</label>
+        {{ client_form.password }}
+        {{ client_form.password.errors }}
+      </div>
+      <button type="submit" class="w-full rounded-full bg-black px-4 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-neutral-800">Se connecter comme client</button>
+    </form>
+    <p class="mt-6 text-center text-sm text-slate-600">
+      Vous avez reçu un code ?
+      <a href="{% url 'invitation_code' %}" class="font-semibold text-black underline underline-offset-2">Créer un compte client</a>
+    </p>
+  </section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var tabs = document.querySelectorAll('[data-login-tab]');
+  var panels = document.querySelectorAll('[data-login-panel]');
+  var active = '{{ login_mode|default:"entreprise"|escapejs }}';
+
+  function select(mode) {
+    tabs.forEach(function(tab) {
+      var selected = tab.getAttribute('data-login-tab') === mode;
+      tab.classList.toggle('bg-white', selected);
+      tab.classList.toggle('text-black', selected);
+      tab.classList.toggle('shadow-sm', selected);
+      tab.classList.toggle('text-slate-500', !selected);
+      tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+    panels.forEach(function(panel) {
+      panel.hidden = panel.getAttribute('data-login-panel') !== mode;
+    });
+  }
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() { select(tab.getAttribute('data-login-tab')); });
+  });
+  select(active === 'client' ? 'client' : 'entreprise');
+})();
+</script>
 {% endblock %}

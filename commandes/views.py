@@ -6,17 +6,20 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.db import transaction
-from django.http import JsonResponse
+from django.db.models import Q
+from django.http import Http404, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from articles.currency import get_primary_currency_code, to_primary_amount
-from caisse.models import MouvementCaisse
+from articles.models import Article, Unite
+from caisse.models import CaisseCompte, MouvementCaisse
 from commandes.models import ClientDettePaiement, ClientSoldeMouvement, Commande, CommandeLigne
 from lots.models import DepenseLot, LotStock
 from lots.services import sync_lot_transit_closure
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
-from users.models import User
+from users.models import Client, Entreprise, User
 from users.navigation import can_access_store_module
 from ventes.models import Vente, VenteFifoConsommation, VenteLigne
 
@@ -66,6 +69,102 @@ class StoreCommandesView(CommandesAccessMixin, TemplateView):
         return ctx
 
 
+def _payment_proof_context(eid: int, *, payment, proof_type: str) -> dict:
+    client = Client.objects.filter(pk=payment.client_id).first()
+    entreprise = Entreprise.objects.filter(pk=eid).first()
+    caisse_id = getattr(payment, 'caisse_id', None)
+    caisse = CaisseCompte.objects.filter(entreprise_id=eid, pk=caisse_id).first() if caisse_id else None
+    vente = None
+    produits = []
+    if proof_type == 'commande':
+        vente = Vente.objects.filter(entreprise_id=eid, commande_id=payment.commande_id).first()
+        if vente:
+            vente_lignes = list(VenteLigne.objects.filter(vente_id=vente.vente_id).order_by('id'))
+            article_ids = [line.article_id for line in vente_lignes]
+            articles = {
+                article.article_id: article
+                for article in Article.objects.filter(entreprise_id=eid, article_id__in=article_ids).only(
+                    'article_id',
+                    'nom',
+                    'unite_id',
+                )
+            }
+            unite_ids = [article.unite_id for article in articles.values()]
+            unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
+            for line in vente_lignes:
+                article = articles.get(line.article_id)
+                unite = unites.get(article.unite_id) if article else None
+                produits.append(
+                    {
+                        'nom': article.nom if article else line.article_id,
+                        'quantite': line.quantite,
+                        'unite': (unite.libelle or unite.code) if unite else '',
+                        'prix_unitaire': line.prix_unitaire_vente,
+                    }
+                )
+        reference = payment.commande_id
+        montant = payment.depot_montant
+        devise = payment.devise
+        statut = payment.get_paiement_statut_display()
+        date_operation = payment.date_commande
+        note = payment.note_client
+    else:
+        reference = f'DETTE-{payment.pk}'
+        montant = payment.montant
+        devise = payment.devise
+        statut = payment.get_statut_display()
+        date_operation = payment.date_soumission
+        note = payment.note_client
+    return {
+        'entreprise': entreprise,
+        'client': client,
+        'caisse': caisse,
+        'payment': payment,
+        'vente': vente,
+        'produits': produits,
+        'proof_type': proof_type,
+        'reference': reference,
+        'montant': montant,
+        'devise': devise,
+        'statut': statut,
+        'date_operation': date_operation,
+        'note': note,
+        'preuve_url': payment.preuve_paiement.url if payment.preuve_paiement else '',
+    }
+
+
+class CommandePreuveImprimerView(CommandesAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, commande_id: str, *args, **kwargs):
+        eid = self.entreprise_id()
+        commande = Commande.objects.filter(entreprise_id=eid, commande_id=commande_id).first()
+        if not commande:
+            raise Http404('Commande introuvable.')
+        if not Vente.objects.filter(entreprise_id=eid, commande_id=commande.commande_id).exists():
+            raise Http404('La preuve sera disponible apres creation de la vente.')
+        return render(
+            request,
+            'commandes/payment_proof_print.html',
+            _payment_proof_context(eid, payment=commande, proof_type='commande'),
+        )
+
+
+class DettePreuveImprimerView(CommandesAccessMixin, View):
+    http_method_names = ['get']
+
+    def get(self, request, paiement_id: int, *args, **kwargs):
+        eid = self.entreprise_id()
+        paiement = ClientDettePaiement.objects.filter(entreprise_id=eid, pk=paiement_id).first()
+        if not paiement:
+            raise Http404('Paiement introuvable.')
+        return render(
+            request,
+            'commandes/payment_proof_print.html',
+            _payment_proof_context(eid, payment=paiement, proof_type='dette'),
+        )
+
+
 class CommandesApiListView(CommandesAccessMixin, View):
     http_method_names = ['get']
 
@@ -75,12 +174,26 @@ class CommandesApiListView(CommandesAccessMixin, View):
             return JsonResponse({'results': [], 'count': 0, 'page': 1, 'page_size': 25}, status=200)
 
         qs = Commande.objects.filter(entreprise_id=eid).order_by('-date_commande', '-commande_id')
+        q = (request.GET.get('q') or '').strip()
+        if q:
+            matching_clients = Client.objects.filter(
+                Q(id__icontains=q) | Q(nom__icontains=q) | Q(email__icontains=q)
+            ).values_list('id', flat=True)
+            qs = qs.filter(Q(commande_id__icontains=q) | Q(client_id__in=matching_clients))
         statut = (request.GET.get('statut') or '').strip()
         if statut:
             qs = qs.filter(statut=statut)
 
         rows, count, page, page_size = _paginate(qs, request)
         commande_ids = [r.commande_id for r in rows]
+        sold_command_ids = set(
+            Vente.objects.filter(entreprise_id=eid, commande_id__in=commande_ids).values_list('commande_id', flat=True)
+        )
+        client_ids = [r.client_id for r in rows if r.client_id]
+        clients_by_id = {
+            c.id: c
+            for c in Client.objects.filter(id__in=client_ids).only('id', 'nom', 'email')
+        }
         lignes_by_cmd: dict[str, list[dict]] = {}
         for line in CommandeLigne.objects.filter(commande_id__in=commande_ids).order_by('id'):
             lignes_by_cmd.setdefault(line.commande_id, []).append(
@@ -96,10 +209,16 @@ class CommandesApiListView(CommandesAccessMixin, View):
         results = []
         for r in rows:
             solde = _client_solde_principal(eid, r.client_id) if r.client_id else Decimal('0')
+            client = clients_by_id.get(r.client_id)
+            client_email = (client.email or '') if client else ''
+            client_initial = (client_email.strip()[:1] or (client.nom.strip()[:1] if client and client.nom else '?')).upper()
             results.append(
                 {
                     'commande_id': r.commande_id,
                     'client_id': r.client_id,
+                    'client_nom': client.nom if client else '',
+                    'client_email': client_email,
+                    'client_email_initial': client_initial,
                     'statut': r.statut,
                     'total': str(r.total),
                     'devise': r.devise,
@@ -109,6 +228,8 @@ class CommandesApiListView(CommandesAccessMixin, View):
                     'caisse_id': r.caisse_id,
                     'paiement_statut': r.paiement_statut,
                     'depot_montant': str(r.depot_montant),
+                    'preuve_paiement_url': r.preuve_paiement.url if r.preuve_paiement else '',
+                    'vente_creee': r.commande_id in sold_command_ids,
                     'date_commande': r.date_commande.isoformat(),
                     'lignes': lignes_by_cmd.get(r.commande_id, []),
                 }

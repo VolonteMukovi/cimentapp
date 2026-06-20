@@ -5,6 +5,7 @@ from commandes import client_views
 
 urlpatterns = [
     path('', client_views.ClientOrdersView.as_view(), name='client_orders'),
+    path('preuves/<str:commande_id>/', client_views.ClientCommandePreuveView.as_view(), name='client_commande_preuve'),
     path('transactions/', client_views.ClientTransactionsView.as_view(), name='client_transactions'),
     path('creer/', client_views.ClientOrderCreateView.as_view(), name='client_order_create'),
     path('api/stats/', client_views.ClientOrdersStatsApiView.as_view(), name='client_orders_stats'),

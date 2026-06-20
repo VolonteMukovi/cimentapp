@@ -10,6 +10,9 @@ class CaisseCompte(models.Model):
 
     entreprise_id = models.PositiveIntegerField(db_index=True)
     nom = models.CharField(max_length=120)
+    banque_nom = models.CharField(max_length=120, blank=True)
+    compte_intitule = models.CharField(max_length=180, blank=True)
+    numero_compte = models.CharField(max_length=80, blank=True)
     actif = models.BooleanField(default=True)
     created_by_user_id = models.CharField(max_length=32, blank=True)
     date_creation = models.DateTimeField(auto_now_add=True)

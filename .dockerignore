@@ -36,3 +36,9 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
+.venv/
+venv/
+__pycache__/
+*.pyc
+.git/
+db.sqlite3

@@ -4,15 +4,16 @@ from datetime import datetime
 from decimal import Decimal
 
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import F, Sum
+from django.db.models import F, Q, Sum
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from articles.currency import get_primary_currency_code, to_primary_amount
-from lots.models import DepenseLot, LotStock
+from articles.models import Article, Unite
+from lots.models import DepenseLot, LotStock, LotTransit
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
-from users.models import User
+from users.models import Entreprise, User
 from users.navigation import can_access_store_module
 from ventes.models import Vente, VenteFifoConsommation, VenteLigne
 
@@ -62,6 +63,19 @@ class RapportsHomeView(RapportsAccessMixin, TemplateView):
         return ctx
 
 
+class RapportsPrintView(RapportsAccessMixin, TemplateView):
+    template_name = 'rapports/rapports_print.html'
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        eid = self.entreprise_id()
+        ctx['entreprise'] = Entreprise.objects.filter(pk=eid).first()
+        ctx['date_from'] = (self.request.GET.get('date_from') or '').strip()
+        ctx['date_to'] = (self.request.GET.get('date_to') or '').strip()
+        ctx['q'] = (self.request.GET.get('q') or '').strip()
+        return ctx
+
+
 class BeneficesParLotApiView(RapportsAccessMixin, View):
     """
     Agrégation bénéfice par lot:
@@ -77,6 +91,7 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
 
         dt_from = request.GET.get('date_from')
         dt_to = request.GET.get('date_to')
+        q = (request.GET.get('q') or '').strip()
 
         ventes = Vente.objects.filter(entreprise_id=eid)
         if dt_from:
@@ -105,11 +120,39 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
             )
             .order_by('-lot_id')
         )
+        if q:
+            article_ids = Article.objects.filter(
+                entreprise_id=eid,
+                nom__icontains=q,
+            ).values_list('article_id', flat=True)
+            transit_ids = LotTransit.objects.filter(
+                entreprise_id=eid,
+            ).filter(Q(reference__icontains=q) | Q(fournisseur__icontains=q)).values_list('id', flat=True)
+            lot_ids_match = LotStock.objects.filter(
+                entreprise_id=eid,
+            ).filter(
+                Q(reference__icontains=q)
+                | Q(article_id__in=article_ids)
+                | Q(article_id__icontains=q)
+                | Q(lot_transit_id__in=transit_ids)
+            ).values_list('id', flat=True)
+            cons = cons.filter(Q(lot_id__in=lot_ids_match) | Q(article_id__in=article_ids) | Q(article_id__icontains=q))
 
         cons_rows, count, page, page_size = _paginate(cons, request)
 
         lot_ids = [r['lot_id'] for r in cons_rows]
         lots = {x.id: x for x in LotStock.objects.filter(entreprise_id=eid, id__in=lot_ids)}
+        article_ids = [r['article_id'] for r in cons_rows]
+        articles = {
+            x.article_id: x
+            for x in Article.objects.filter(entreprise_id=eid, article_id__in=article_ids).only(
+                'article_id',
+                'nom',
+                'unite_id',
+            )
+        }
+        unite_ids = [article.unite_id for article in articles.values()]
+        unites = {x.id: x for x in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
 
         # CA par lot: consommation détaillée -> lignes -> prix_unitaire_vente
         cons_detail = list(
@@ -150,15 +193,22 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
             ca = ca_by_lot.get(int(r['lot_id']), Decimal('0'))
             cout = (r['cout_achat'] or Decimal('0')) + (r['cout_dep'] or Decimal('0'))
             benef = ca - cout
+            article = articles.get(r['article_id'])
+            unite = unites.get(article.unite_id) if article else None
+            margin = ((benef / ca) * Decimal('100')).quantize(Decimal('0.01')) if ca else Decimal('0')
             results.append(
                 {
                     'lot_id': r['lot_id'],
+                    'lot_reference': lot.reference if lot and lot.reference else f'Lot #{r["lot_id"]}',
                     'article_id': r['article_id'],
+                    'article_nom': article.nom if article else r['article_id'],
+                    'unite': (unite.libelle or unite.code) if unite else '',
                     'quantite_vendue_fifo': str(r['qte'] or Decimal('0')),
                     'chiffre_affaires': str(ca),
                     'cout_total_fifo': str(cout),
                     'depenses_lot_total': str(exp_map.get(r['lot_id'], Decimal('0'))),
                     'benefice_estime': str(benef),
+                    'marge_pourcentage': str(margin),
                     'lot_date_entree': lot.date_entree.isoformat() if lot else None,
                 }
             )
@@ -202,6 +252,7 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
         ventes = Vente.objects.filter(entreprise_id=eid)
         dt_from = request.GET.get('date_from')
         dt_to = request.GET.get('date_to')
+        q = (request.GET.get('q') or '').strip()
         if dt_from:
             try:
                 ventes = ventes.filter(date_vente__gte=datetime.fromisoformat(dt_from))
@@ -212,6 +263,28 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
                 ventes = ventes.filter(date_vente__lte=datetime.fromisoformat(dt_to))
             except Exception:
                 pass
+        if q:
+            article_ids = Article.objects.filter(
+                entreprise_id=eid,
+                nom__icontains=q,
+            ).values_list('article_id', flat=True)
+            transit_ids = LotTransit.objects.filter(
+                entreprise_id=eid,
+            ).filter(Q(reference__icontains=q) | Q(fournisseur__icontains=q)).values_list('id', flat=True)
+            matching_lot_ids = LotStock.objects.filter(
+                entreprise_id=eid,
+            ).filter(
+                Q(reference__icontains=q)
+                | Q(article_id__in=article_ids)
+                | Q(article_id__icontains=q)
+                | Q(lot_transit_id__in=transit_ids)
+            ).values_list('id', flat=True)
+            matching_vente_ids = VenteFifoConsommation.objects.filter(
+                Q(lot_id__in=matching_lot_ids)
+                | Q(article_id__in=article_ids)
+                | Q(article_id__icontains=q)
+            ).values_list('vente_id', flat=True)
+            ventes = ventes.filter(vente_id__in=matching_vente_ids)
 
         vente_rows = list(ventes.only('vente_id', 'date_vente', 'total', 'devise'))
         vente_map = {v.vente_id: v.date_vente.date() for v in vente_rows}
