@@ -72,6 +72,77 @@
   padding-bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
 }
 
+/* Modales mobile-first : contenu défilable et actions toujours accessibles. */
+.app-modal-layer {
+  align-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding:
+    max(0.5rem, env(safe-area-inset-top, 0px))
+    0.5rem
+    max(0.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+.app-modal-panel {
+  display: flex;
+  max-height: calc(100vh - 1rem);
+  max-height: calc(100dvh - 1rem);
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-modal-panel > form {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-modal-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-right: -1.25rem;
+  margin-left: -1.25rem;
+  border-top: 1px solid rgb(226 232 240);
+  box-shadow: 0 -8px 18px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.98);
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 639px) {
+  .app-modal-panel {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    border-radius: 1rem;
+  }
+
+  .app-modal-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .app-modal-actions > button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .app-modal-panel input,
+  .app-modal-panel select,
+  .app-modal-panel textarea {
+    font-size: 16px;
+  }
+
+  #caisse-create-form input,
+  #caisse-entree-form input,
+  #caisse-entree-form select,
+  #caisse-sortie-form input,
+  #caisse-sortie-form select {
+    font-size: 16px;
+  }
+}
+
 @media (min-width: 640px) {
   .app-shell-scroll {
     padding-bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px));
