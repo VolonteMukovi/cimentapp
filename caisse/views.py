@@ -386,6 +386,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
             return JsonResponse(
                 {
                     'results': [],
+                    'available_caisses': [],
                     'count': 0,
                     'page': 1,
                     'page_size': 25,
@@ -395,6 +396,22 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
             )
 
         balances = cash_balances_by_caisse(eid)
+        available_caisses = [
+            {
+                'caisse_id': caisse.id,
+                'nom': caisse.nom,
+                'banque_nom': caisse.banque_nom,
+                'compte_intitule': caisse.compte_intitule,
+                'numero_compte': caisse.numero_compte,
+                'solde': str(balances.get(caisse.id, Decimal('0'))),
+                'has_transactions': caisse.id in balances,
+                'devise_principale': get_primary_currency_code(eid),
+            }
+            for caisse in CaisseCompte.objects.filter(entreprise_id=eid, actif=True).order_by(
+                '-date_creation',
+                '-id',
+            )[:200]
+        ]
         rows = sorted(balances.items(), key=lambda item: (item[1], item[0]), reverse=True)[:50]
         caisse_ids = [cid for cid, _solde in rows]
         caisses = {
@@ -417,6 +434,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
         return JsonResponse(
             {
                 'results': results,
+                'available_caisses': available_caisses,
                 'count': len(results),
                 'page': 1,
                 'page_size': 25,

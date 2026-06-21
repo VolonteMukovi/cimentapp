@@ -196,7 +196,7 @@
         var labels = [];
         var values = [];
         var first = null;
-        caissesCache = data.results || [];
+        caissesCache = data.available_caisses || data.results || [];
         refreshSortieCaisses();
         (data.results || []).forEach(function (r) {
           var tr = document.createElement('tr');
@@ -298,7 +298,7 @@
     caissesCache.forEach(function(c){
       var opt = document.createElement('option');
       opt.value = c.caisse_id;
-      opt.textContent = c.nom || ('Caisse #' + c.caisse_id);
+      opt.textContent = (c.nom || ('Caisse #' + c.caisse_id)) + (c.has_transactions === false ? ' (aucune transaction)' : '');
       sel.appendChild(opt);
     });
     sel.value = current;
