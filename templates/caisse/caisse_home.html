@@ -66,8 +66,13 @@
         <div class="mt-3 text-xs text-slate-600" id="caisse-pager">—</div>
       </div>
     </div>
-    <div class="mt-4 grid gap-3 lg:grid-cols-3">
-    <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 lg:hidden" aria-label="Operations de caisse">
+      <button type="button" data-caisse-panel-tab="entree" class="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold" aria-selected="true">Encaissement</button>
+      <button type="button" data-caisse-panel-tab="sortie" class="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold" aria-selected="false">Decaissement</button>
+      <button type="button" data-caisse-panel-tab="history" class="min-w-0 rounded-lg px-2 py-2.5 text-xs font-semibold" aria-selected="false">Transactions</button>
+    </div>
+    <div class="mt-3 grid min-w-0 gap-3 lg:mt-4 lg:grid-cols-3">
+    <div data-caisse-panel="entree" class="caisse-operation-panel min-w-0 rounded-2xl border border-slate-200 bg-white p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Encaissement</p>
       <form id="caisse-entree-form" class="mt-2 grid gap-2">
         <select name="caisse_id" id="entree-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
@@ -79,13 +84,13 @@
         <p id="caisse-entree-msg" class="text-xs text-slate-600"></p>
       </form>
     </div>
-    <div class="rounded-2xl border border-slate-200 bg-white p-4 lg:order-3">
+    <div data-caisse-panel="history" class="caisse-operation-panel hidden min-w-0 rounded-2xl border border-slate-200 bg-white p-4 lg:order-3 lg:block">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">10 dernieres transactions</p>
       <p id="caisse-history-title" class="mt-1 text-sm font-semibold text-black">Selectionnez une caisse</p>
-      <div id="caisse-history-list" class="mt-3 max-h-80 space-y-2 overflow-y-auto pr-1"></div>
+      <div id="caisse-history-list" class="mt-3 max-h-[55dvh] min-w-0 space-y-2 overflow-x-hidden overflow-y-auto pr-1 lg:max-h-80"></div>
     </div>
 
-    <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div data-caisse-panel="sortie" class="caisse-operation-panel hidden min-w-0 rounded-2xl border border-slate-200 bg-white p-4 lg:block">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Decaissement</p>
       <form id="caisse-sortie-form" class="mt-2 grid gap-2">
         <select name="caisse_id" id="sortie-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
@@ -110,6 +115,7 @@
   var donut = null;
   var selectedCaisseId = null;
   var caissesCache = [];
+  var activeCaissePanel = 'entree';
 
   function money(v, code) {
     return (v || '0.00') + (code ? (' ' + code) : '');
@@ -121,9 +127,29 @@
     });
   }
 
-  function fetchRecent(caisseId, caisseName) {
+  function selectCaissePanel(name) {
+    activeCaissePanel = name;
+    document.querySelectorAll('[data-caisse-panel-tab]').forEach(function(btn) {
+      var active = btn.getAttribute('data-caisse-panel-tab') === name;
+      btn.classList.toggle('bg-white', active);
+      btn.classList.toggle('text-black', active);
+      btn.classList.toggle('shadow-sm', active);
+      btn.classList.toggle('text-slate-500', !active);
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('[data-caisse-panel]').forEach(function(panel) {
+      if (window.innerWidth >= 1024) {
+        panel.classList.remove('hidden');
+        return;
+      }
+      panel.classList.toggle('hidden', panel.getAttribute('data-caisse-panel') !== name);
+    });
+  }
+
+  function fetchRecent(caisseId, caisseName, showPanel) {
     if (!caisseId) return Promise.resolve();
     selectedCaisseId = caisseId;
+    if (showPanel && window.innerWidth < 1024) selectCaissePanel('history');
     var title = document.getElementById('caisse-history-title');
     var list = document.getElementById('caisse-history-list');
     title.textContent = caisseName || ('Caisse #' + caisseId);
@@ -202,7 +228,7 @@
         }
         document.querySelectorAll('.history-btn').forEach(function(btn){
           btn.addEventListener('click', function(){
-            fetchRecent(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+            fetchRecent(btn.getAttribute('data-id'), btn.getAttribute('data-name'), true);
           });
         });
         if (!selectedCaisseId && first) {
@@ -283,6 +309,16 @@
     refreshCaisseSelect('entree-caisse-select');
   }
 
+  document.querySelectorAll('[data-caisse-panel-tab]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      selectCaissePanel(btn.getAttribute('data-caisse-panel-tab'));
+    });
+  });
+
+  window.addEventListener('resize', function() {
+    selectCaissePanel(activeCaissePanel);
+  });
+
   document.getElementById('caisse-refresh').addEventListener('click', function (e) {
     e.preventDefault();
     fetchSolde();
@@ -356,6 +392,7 @@
       .catch(function(){ msg.textContent = 'Erreur reseau.'; });
   });
 
+  selectCaissePanel(activeCaissePanel);
   fetchSolde();
 })();
 </script>

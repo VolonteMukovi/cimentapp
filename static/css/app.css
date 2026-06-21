@@ -111,6 +111,21 @@
   padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
 }
 
+.caisse-operation-panel,
+.caisse-operation-panel form,
+.caisse-operation-panel input,
+.caisse-operation-panel select,
+.caisse-operation-panel button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.caisse-operation-panel input,
+.caisse-operation-panel select,
+.caisse-operation-panel button {
+  width: 100%;
+}
+
 @media (max-width: 639px) {
   .app-modal-panel {
     width: 100%;
