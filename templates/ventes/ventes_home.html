@@ -43,7 +43,7 @@
   </section>
 
   <section class="app-surface-card p-5 sm:p-6">
-    <div class="flex items-center justify-between gap-3">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <h2 class="text-base font-bold text-black">Ventes (récentes)</h2>
       <button id="ventes-refresh" class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 hover:border-slate-300">Actualiser</button>
     </div>
@@ -53,7 +53,7 @@
       <canvas id="ventes-chart" height="140" aria-label="Graphique CA ventes"></canvas>
     </div>
     <div class="mt-4 overflow-x-auto">
-      <table class="min-w-full text-left text-sm">
+      <table class="min-w-[720px] text-left text-sm">
         <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
           <tr>
             <th class="py-2 pr-4">Vente</th>

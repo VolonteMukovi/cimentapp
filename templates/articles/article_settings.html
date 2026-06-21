@@ -100,8 +100,8 @@
     <button type="button" id="btn-open-unite-modal" class="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Ajouter une unité</button>
   </div>
 
-  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-    <table class="w-full text-left text-sm">
+  <div class="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+    <table class="w-full min-w-[760px] text-left text-sm">
       <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
         <tr>
           <th class="px-4 py-3">Code</th>
@@ -150,8 +150,8 @@
   </div>
 </section>
 
-<div id="modal-unite" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter une unité">
-  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+<div id="modal-unite" class="app-modal-layer fixed inset-0 z-[300] hidden items-center justify-center bg-black/45" role="dialog" aria-modal="true" aria-label="Ajouter une unité">
+  <div class="app-modal-panel w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
       <h3 id="modal-unite-title" class="text-lg font-bold text-black">Ajouter une unité</h3>
       <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-modal-close" data-close="modal-unite" aria-label="Fermer">✕</button>
@@ -169,7 +169,7 @@
       <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
         {{ form_unite.actif }} <span>Actif</span>
       </label>
-      <div class="flex justify-end gap-2 pt-2">
+      <div class="app-modal-actions flex justify-end gap-2 pt-2">
         <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-unite">Annuler</button>
         <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
       </div>
@@ -270,8 +270,8 @@
     </div>
   </form>
 
-  <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200">
-    <table class="w-full text-left text-sm">
+  <div class="mt-5 overflow-x-auto rounded-2xl border border-slate-200">
+    <table class="w-full min-w-[640px] text-left text-sm">
       <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
         <tr>
           <th class="px-4 py-3">Code</th>
@@ -463,8 +463,8 @@
         <div class="art-acc-panel hidden px-4 pb-4" data-type-panel="{{ t.id }}">
           <div class="rounded-2xl border border-slate-100 bg-slate-50/70 p-3">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Sous-types</p>
-            <div class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
-              <table class="w-full text-left text-sm">
+            <div class="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table class="w-full min-w-[560px] text-left text-sm">
                 <thead class="bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th class="px-3 py-2">Libellé</th>
@@ -525,8 +525,8 @@
   </div>
 </section>
 
-<div id="modal-type" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter un type">
-  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+<div id="modal-type" class="app-modal-layer fixed inset-0 z-[300] hidden items-center justify-center bg-black/45" role="dialog" aria-modal="true" aria-label="Ajouter un type">
+  <div class="app-modal-panel w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl">
     <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
       <h3 class="text-lg font-bold text-black">Ajouter un type</h3>
       <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-modal-close" data-close="modal-type" aria-label="Fermer">✕</button>
@@ -541,7 +541,7 @@
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_type.description.id_for_label }}">Description</label>
         {{ form_type.description }}
       </div>
-      <div class="flex justify-end gap-2 pt-2">
+      <div class="app-modal-actions flex justify-end gap-2 pt-2">
         <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-type">Annuler</button>
         <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
       </div>
@@ -549,8 +549,8 @@
   </div>
 </div>
 
-<div id="modal-soustype" class="fixed inset-0 z-[300] hidden items-end justify-center bg-black/45 p-4 sm:items-center" role="dialog" aria-modal="true" aria-label="Ajouter un sous-type">
-  <div class="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+<div id="modal-soustype" class="app-modal-layer fixed inset-0 z-[300] hidden items-center justify-center bg-black/45" role="dialog" aria-modal="true" aria-label="Ajouter un sous-type">
+  <div class="app-modal-panel w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl">
     <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
       <div class="min-w-0 flex-1">
         <h3 id="modal-soustype-heading" class="text-lg font-bold text-black">Ajouter un sous-type</h3>
@@ -572,7 +572,7 @@
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500" for="{{ form_sous_type.description.id_for_label }}">Description</label>
         {{ form_sous_type.description }}
       </div>
-      <div class="flex justify-end gap-2 pt-2">
+      <div class="app-modal-actions flex justify-end gap-2 pt-2">
         <button type="button" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-modal-close" data-close="modal-soustype">Annuler</button>
         <button type="submit" class="rounded-full bg-black px-5 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
       </div>
