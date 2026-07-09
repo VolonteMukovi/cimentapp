@@ -22,9 +22,11 @@ def _build_csrf_trusted_origins():
         if not host or host == '*':
             continue
         if host in ('127.0.0.1', 'localhost'):
-            origins.extend([f'http://{host}:8000', f'http://{host}'])
+            origins.extend([f'http://{host}:8000', f'http://{host}', f'http://{host}:8001'])
         else:
             origins.append(f'https://{host}')
+            if not host.startswith('www.'):
+                origins.append(f'https://www.{host}')
     extra = os.getenv('CSRF_TRUSTED_ORIGINS', '').strip()
     if extra:
         origins.extend([o.strip() for o in extra.split(',') if o.strip()])
@@ -32,6 +34,17 @@ def _build_csrf_trusted_origins():
 
 
 CSRF_TRUSTED_ORIGINS = _build_csrf_trusted_origins()
+
+# Derriere Nginx / Caddy / Cloudflare : Django doit voir le HTTPS reel.
+TRUST_PROXY = os.getenv('TRUST_PROXY', 'True') == 'True'
+if TRUST_PROXY:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = 'Lax'
 
 # ========================
 # APPLICATIONS

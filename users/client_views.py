@@ -4,7 +4,9 @@ from django.contrib import messages
 from django.db import transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse_lazy
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import FormView, TemplateView
 
 from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
@@ -21,6 +23,7 @@ class UnifiedClientLoginRedirectView(View):
         return redirect('/accounts/login/?mode=client')
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class RegisterClientView(FormView):
     template_name = 'users/pages/register_client.html'
     form_class = RegisterClientForm
@@ -86,6 +89,7 @@ class RegisterClientView(FormView):
         return redirect('client_login')
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class InvitationCodeView(View):
     template_name = 'users/pages/invitation_code.html'
     http_method_names = ['get', 'post']
@@ -105,6 +109,7 @@ class InvitationCodeView(View):
         return redirect('register_client_invitation', invitation_code=entreprise.invitation_code)
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class ClientLoginView(FormView):
     template_name = 'users/pages/client_login.html'
     form_class = ClientLoginForm

@@ -7,6 +7,8 @@ from decimal import Decimal
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.generic import FormView, ListView, RedirectView, TemplateView
 from django.views.generic.edit import CreateView
 
@@ -25,6 +27,7 @@ class HomeRedirectView(RedirectView):
         return reverse_lazy('login')
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class AppLoginView(LoginView):
     template_name = 'users/pages/login.html'
     authentication_form = AppAuthenticationForm
@@ -80,6 +83,7 @@ class AppLogoutView(LogoutView):
     next_page = reverse_lazy('login')
 
 
+@method_decorator(ensure_csrf_cookie, name='dispatch')
 class SignupView(FormView):
     template_name = 'users/pages/signup.html'
     form_class = SignupForm
