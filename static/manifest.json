@@ -1,0 +1,21 @@
+{
+  "short_name": "CimentApp",
+  "name": "CimentApp - Gestion Commerciale",
+  "icons": [
+    {
+      "src": "/static/images/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/static/images/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "display": "standalone",
+  "orientation": "portrait"
+}

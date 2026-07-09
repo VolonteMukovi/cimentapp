@@ -4,10 +4,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="manifest" href="{% static 'manifest.json' %}">
+  <meta name="theme-color" content="#1e3a8a">
   <title>{% block title %}Connexion — CimentApp{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/htmx.org@2.0.0"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -21,7 +24,7 @@
   </script>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
-<body class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">
+<body hx-boost="true" class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">
   <div class="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:py-14">
     <a href="{% url 'home' %}" class="mb-8 flex items-center gap-2.5 text-black transition hover:opacity-90">
       <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white shadow-md ring-1 ring-black/5" aria-hidden="true">C</span>
@@ -39,6 +42,15 @@
     </div>
     <p class="mt-8 text-center text-xs text-slate-500">© {% now "Y" %} CimentApp</p>
   </div>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker
+          .register("{% static 'sw.js' %}")
+          .catch(function () {});
+      });
+    }
+  </script>
   {% block extra_scripts %}{% endblock %}
 </body>
 </html>
