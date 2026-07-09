@@ -33,4 +33,8 @@
     return '';
   }
   window.CSRF_TOKEN = getCookie('csrftoken');
+
+  document.addEventListener('htmx:afterSettle', function () {
+    window.CSRF_TOKEN = getCookie('csrftoken');
+  });
 })();

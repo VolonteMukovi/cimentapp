@@ -4,7 +4,7 @@
   <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Créer un compte</h1>
   <p class="mt-2 text-sm text-slate-600">Un compte <strong class="text-black">administrateur entreprise</strong> sera créé. Vous pourrez ensuite enregistrer votre société.</p>
 
-  <form id="signup-form" method="post" class="mt-8" novalidate>
+  <form id="signup-form" method="post" hx-boost="false" class="mt-8" novalidate>
     {% csrf_token %}
     {% if form.non_field_errors %}
       <div class="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">

@@ -13,7 +13,25 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key')
 
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '127.0.0.1').split(',')
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '127.0.0.1').split(',') if h.strip()]
+
+
+def _build_csrf_trusted_origins():
+    origins = []
+    for host in ALLOWED_HOSTS:
+        if not host or host == '*':
+            continue
+        if host in ('127.0.0.1', 'localhost'):
+            origins.extend([f'http://{host}:8000', f'http://{host}'])
+        else:
+            origins.append(f'https://{host}')
+    extra = os.getenv('CSRF_TRUSTED_ORIGINS', '').strip()
+    if extra:
+        origins.extend([o.strip() for o in extra.split(',') if o.strip()])
+    return list(dict.fromkeys(origins))
+
+
+CSRF_TRUSTED_ORIGINS = _build_csrf_trusted_origins()
 
 # ========================
 # APPLICATIONS
@@ -68,6 +86,7 @@ TEMPLATES = [
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
+                'django.template.context_processors.csrf',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',

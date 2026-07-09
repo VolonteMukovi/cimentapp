@@ -3,7 +3,7 @@
 {% block content %}
   <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Espace client</h1>
   <p class="mt-2 text-sm text-slate-600">Connectez-vous avec l’e-mail et le mot de passe utilisés lors de votre inscription.</p>
-  <form method="post" action="{% url 'client_login' %}" class="mt-8 space-y-5">
+  <form method="post" action="{% url 'client_login' %}" hx-boost="false" class="mt-8 space-y-5">
     {% csrf_token %}
     <div>
       <label for="{{ form.email.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.email.label }}</label>

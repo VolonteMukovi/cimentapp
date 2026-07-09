@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+  <script src="{% static 'js/htmx-csrf.js' %}"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -24,7 +25,7 @@
   </script>
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
-<body hx-boost="true" class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">
+<body hx-boost="false" class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">
   <div class="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:py-14">
     <a href="{% url 'home' %}" class="mb-8 flex items-center gap-2.5 text-black transition hover:opacity-90">
       <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-black text-sm font-bold text-white shadow-md ring-1 ring-black/5" aria-hidden="true">C</span>
