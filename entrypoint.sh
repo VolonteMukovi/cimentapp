@@ -12,6 +12,9 @@ done
 echo "Apply migrations..."
 python manage.py migrate
 
+echo "Ensure media directory exists..."
+mkdir -p /cimentapp/media
+
 echo "Rassemblement des fichiers statiques..."
 python manage.py collectstatic --noinput
 

@@ -5,6 +5,8 @@ services:
       - "8001:8001"
     volumes:
       - .:/cimentapp
+      # Persistance des uploads (logos, images articles, preuves)
+      - media_data:/cimentapp/media
     depends_on:
       db:
         condition: service_healthy
@@ -33,3 +35,4 @@ services:
 
 volumes:
   mysql_data:
+  media_data:
