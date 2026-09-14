@@ -410,7 +410,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
             for caisse in CaisseCompte.objects.filter(entreprise_id=eid, actif=True).order_by(
                 '-date_creation',
                 '-id',
-            )[:200]
+            )
         ]
         rows = sorted(balances.items(), key=lambda item: (item[1], item[0]), reverse=True)[:50]
         caisse_ids = [cid for cid, _solde in rows]

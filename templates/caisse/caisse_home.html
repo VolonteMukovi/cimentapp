@@ -183,6 +183,20 @@
       .catch(function(){ list.innerHTML = '<p class="text-sm text-red-700">Erreur de chargement.</p>'; });
   }
 
+  function normalizeOperationCaisses(rows) {
+    return (rows || []).map(function(c) {
+      return {
+        caisse_id: c.caisse_id || c.id,
+        nom: c.nom || '',
+        banque_nom: c.banque_nom || '',
+        compte_intitule: c.compte_intitule || '',
+        numero_compte: c.numero_compte || '',
+        solde: c.solde || '0.00',
+        has_transactions: c.has_transactions
+      };
+    }).filter(function(c) { return !!c.caisse_id; });
+  }
+
   function fetchSolde() {
     return fetch('/magasin/caisse/api/stats/', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
@@ -196,8 +210,8 @@
         var labels = [];
         var values = [];
         var first = null;
-        caissesCache = data.available_caisses || data.results || [];
-        refreshSortieCaisses();
+        caissesCache = normalizeOperationCaisses(data.available_caisses || []);
+        refreshOperationCaisses();
         (data.results || []).forEach(function (r) {
           var tr = document.createElement('tr');
           if (!first) first = r;
@@ -304,7 +318,7 @@
     sel.value = current;
   }
 
-  function refreshSortieCaisses() {
+  function refreshOperationCaisses() {
     refreshCaisseSelect('sortie-caisse-select');
     refreshCaisseSelect('entree-caisse-select');
   }
