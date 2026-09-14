@@ -17,6 +17,11 @@ from users.models import User
 from users.navigation import can_access_store_module
 
 
+def _caisse_display_label(caisse: CaisseCompte) -> str:
+    details = ' + '.join(x for x in (caisse.banque_nom, caisse.compte_intitule) if x)
+    return f'{caisse.nom} ({details})' if details else caisse.nom
+
+
 def _paginate(qs, request, *, default_page_size: int = 25):
     try:
         page = int(request.GET.get('page') or 1)
@@ -30,8 +35,8 @@ def _paginate(qs, request, *, default_page_size: int = 25):
         page_size = default_page_size
     if page_size < 1:
         page_size = default_page_size
-    if page_size > 200:
-        page_size = 200
+    if page_size > 1000:
+        page_size = 1000
 
     count = qs.count()
     offset = (page - 1) * page_size
@@ -86,6 +91,7 @@ class CaisseApiListView(CaisseAccessMixin, View):
                 'banque_nom': r.banque_nom,
                 'compte_intitule': r.compte_intitule,
                 'numero_compte': r.numero_compte,
+                'display_label': _caisse_display_label(r),
                 'actif': r.actif,
                 'created_by_user_id': r.created_by_user_id,
                 'date_creation': r.date_creation.isoformat(),
@@ -353,6 +359,7 @@ class CaisseSoldeApiView(CaisseAccessMixin, View):
                 'banque_nom': caisses.get(cid).banque_nom if caisses.get(cid) else '',
                 'compte_intitule': caisses.get(cid).compte_intitule if caisses.get(cid) else '',
                 'numero_compte': caisses.get(cid).numero_compte if caisses.get(cid) else '',
+                'display_label': _caisse_display_label(caisses.get(cid)) if caisses.get(cid) else '',
                 'solde': str(solde or Decimal('0')),
                 'devise_principale': get_primary_currency_code(eid),
             }
@@ -403,6 +410,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
                 'banque_nom': caisse.banque_nom,
                 'compte_intitule': caisse.compte_intitule,
                 'numero_compte': caisse.numero_compte,
+                'display_label': _caisse_display_label(caisse),
                 'solde': str(balances.get(caisse.id, Decimal('0'))),
                 'has_transactions': caisse.id in balances,
                 'devise_principale': get_primary_currency_code(eid),
@@ -425,6 +433,7 @@ class CaisseStatsApiView(CaisseAccessMixin, View):
                 'banque_nom': caisses.get(cid).banque_nom if caisses.get(cid) else '',
                 'compte_intitule': caisses.get(cid).compte_intitule if caisses.get(cid) else '',
                 'numero_compte': caisses.get(cid).numero_compte if caisses.get(cid) else '',
+                'display_label': _caisse_display_label(caisses.get(cid)) if caisses.get(cid) else '',
                 'solde': str(solde or Decimal('0')),
                 'devise_principale': get_primary_currency_code(eid),
             }

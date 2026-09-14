@@ -22,7 +22,7 @@
       </div>
       <div class="grid gap-2">
         <label class="text-xs font-semibold uppercase tracking-wide text-slate-500">Moyen de paiement / dépôt (optionnel)</label>
-        <select name="caisse_id" id="client-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <select name="caisse_id" id="client-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-black focus:outline-none sm:text-sm">
           <option value="">— Choisir (optionnel) —</option>
         </select>
         <div id="client-caisse-details" class="hidden rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700"></div>
@@ -46,6 +46,12 @@
   var caisseSel = document.getElementById('client-caisse-select');
   var caissesById = {};
 
+  function caisseLabel(c) {
+    if (c.display_label) return c.display_label;
+    var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
+    return c.nom + (details ? (' (' + details + ')') : '');
+  }
+
   function boot() {
     fetch('/fr/client/commandes/api/lookups/', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
@@ -57,14 +63,16 @@
         articles.forEach(function(a){
           var opt = document.createElement('option');
           opt.value = a.article_id;
-          opt.textContent = a.nom + ' (' + a.article_id + ')';
+          opt.textContent = a.display_label || (a.nom + ' (' + a.article_id + ')');
+          opt.title = opt.textContent;
           articleSel.appendChild(opt);
         });
         // caisses
         caisses.forEach(function(c){
           var opt = document.createElement('option');
           opt.value = c.id;
-          opt.textContent = c.nom + (c.banque_nom ? (' - ' + c.banque_nom) : '');
+          opt.textContent = caisseLabel(c);
+          opt.title = caisseLabel(c);
           caissesById[String(c.id)] = c;
           caisseSel.appendChild(opt);
         });

@@ -35,7 +35,7 @@
       <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Actions</p>
         <div class="mt-2 grid gap-2">
-          <select id="action-caisse" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+          <select id="action-caisse" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-black focus:outline-none sm:text-sm">
             <option value="">— Caisse —</option>
           </select>
           <input id="action-montant" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="Montant" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
@@ -96,15 +96,22 @@
       .map(function(k){ return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
   }
 
+  function caisseLabel(c) {
+    if (c.display_label) return c.display_label;
+    var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
+    return c.nom + (details ? (' (' + details + ')') : '');
+  }
+
   function bootCaisses() {
-    return fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }})
+    return fetch('/magasin/caisse/api/caisses/?page=1&page_size=1000&actif=true', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
       .then(function(data){
         var sel = document.getElementById('action-caisse');
         (data.results || []).forEach(function(c){
           var opt = document.createElement('option');
           opt.value = c.id;
-          opt.textContent = c.nom;
+          opt.textContent = caisseLabel(c);
+          opt.title = caisseLabel(c);
           sel.appendChild(opt);
         });
       });

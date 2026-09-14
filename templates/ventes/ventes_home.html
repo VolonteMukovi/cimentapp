@@ -14,7 +14,7 @@
             <option value="">â€” Choisir un client â€”</option>
           </select>
           <input name="client_nom" id="client-nom-libre" placeholder="Client non abonne (nom)" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
-          <select name="caisse_id" id="caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+          <select name="caisse_id" id="caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-black focus:outline-none sm:text-sm" required>
             <option value="">— Choisir une caisse —</option>
           </select>
         </div>
@@ -94,7 +94,7 @@
     articlesCache.forEach(function(a){
       var opt = document.createElement('option');
       opt.value = a.article_id;
-      opt.textContent = a.nom + ' (' + a.article_id + ')';
+      opt.textContent = a.display_label || (a.nom + ' (' + a.article_id + ')');
       opt.setAttribute('data-prix', a.prix_catalogue);
       select.appendChild(opt);
     });
@@ -133,9 +133,14 @@
     var out = document.getElementById('vente-total-estime');
     if (out) out.textContent = total > 0 ? total.toFixed(2) : '—';
   }
+  function caisseLabel(c) {
+    if (c.display_label) return c.display_label;
+    var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
+    return c.nom + (details ? (' (' + details + ')') : '');
+  }
   function bootLookups() {
     return Promise.all([
-      fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
+      fetch('/magasin/caisse/api/caisses/?page=1&page_size=1000&actif=true', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
       fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); }),
       fetch('/magasin/ventes/api/lookups/', { headers: { 'Accept': 'application/json' }}).then(function(r){ return r.json(); })
     ]).then(function(res){
@@ -146,7 +151,8 @@
       (caisses.results || []).forEach(function(c){
         var opt = document.createElement('option');
         opt.value = c.id;
-        opt.textContent = c.nom + ' (#' + c.id + ')';
+        opt.textContent = caisseLabel(c);
+        opt.title = caisseLabel(c);
         caisseSel.appendChild(opt);
       });
       var clientSel = document.getElementById('client-select');
@@ -167,7 +173,12 @@
       primaryCurrency = lookups.devise_principale || primaryCurrency;
       deviseSel.value = primaryCurrency;
       articlesCache = (articles.results || []).map(function(a){
-        return { article_id: a.article_id, nom: a.nom, prix_catalogue: a.prix_catalogue };
+        return {
+          article_id: a.article_id,
+          nom: a.nom,
+          display_label: a.display_label,
+          prix_catalogue: a.prix_catalogue
+        };
       });
       linesEl.innerHTML = '';
       addLine();

@@ -40,17 +40,17 @@
       <h2 class="text-base font-bold text-black">Soldes par caisse</h2>
       <p class="text-xs text-slate-500">Touchez une caisse pour consulter ses dernières opérations.</p>
     </div>
-    <div class="mt-4 grid gap-3 lg:grid-cols-2">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+    <div class="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">
+      <div class="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Répartition des soldes</p>
-        <div class="relative mt-3 h-64 w-full sm:h-72">
-          <canvas id="caisse-chart" aria-label="Graphique répartition soldes"></canvas>
+        <div class="relative mt-3 h-52 w-full min-w-0 sm:h-72">
+          <canvas id="caisse-chart" class="block max-w-full" aria-label="Graphique répartition soldes"></canvas>
           <p id="caisse-chart-empty" class="absolute inset-0 hidden items-center justify-center text-center text-sm text-slate-500">Aucun solde positif à représenter.</p>
         </div>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+      <div class="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
         <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Détail</p>
-        <div id="caisse-mobile-list" class="mt-3 space-y-2 md:hidden"></div>
+        <div id="caisse-mobile-list" class="mt-3 min-w-0 space-y-2 md:hidden"></div>
         <div class="mt-3 hidden overflow-x-auto md:block">
           <table class="min-w-[560px] text-left text-sm">
             <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -63,7 +63,7 @@
             <tbody id="caisse-tbody" class="divide-y divide-slate-100"></tbody>
           </table>
         </div>
-        <div class="mt-3 text-xs text-slate-600" id="caisse-pager">—</div>
+        <div class="mt-3 break-words text-xs text-slate-600" id="caisse-pager">—</div>
       </div>
     </div>
     <div class="mt-4 grid grid-cols-3 gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 lg:hidden" aria-label="Operations de caisse">
@@ -75,7 +75,7 @@
     <div data-caisse-panel="entree" class="caisse-operation-panel min-w-0 rounded-2xl border border-slate-200 bg-white p-4">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Encaissement</p>
       <form id="caisse-entree-form" class="mt-2 grid gap-2">
-        <select name="caisse_id" id="entree-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <select name="caisse_id" id="entree-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-black focus:outline-none sm:text-sm" required>
           <option value="">— Sous-compte concerne —</option>
         </select>
         <input name="montant" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="Montant" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
@@ -93,7 +93,7 @@
     <div data-caisse-panel="sortie" class="caisse-operation-panel hidden min-w-0 rounded-2xl border border-slate-200 bg-white p-4 lg:block">
       <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Decaissement</p>
       <form id="caisse-sortie-form" class="mt-2 grid gap-2">
-        <select name="caisse_id" id="sortie-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <select name="caisse_id" id="sortie-caisse-select" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-black focus:outline-none sm:text-sm" required>
           <option value="">— Sous-compte concerne —</option>
         </select>
         <input name="montant" type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="Montant" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
@@ -104,6 +104,58 @@
     </div>
     </div>
   </section>
+
+  <section class="app-surface-card p-5 sm:p-6">
+    <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0">
+        <h2 class="text-base font-bold text-black">Gestion des sous-comptes caisse</h2>
+        <p class="mt-1 text-xs text-slate-500">Modifier les informations bancaires ou rendre une sous-caisse inactive.</p>
+      </div>
+    </div>
+    <div id="caisse-manage-mobile" class="mt-4 space-y-2 md:hidden"></div>
+    <div class="mt-4 hidden overflow-x-auto md:block">
+      <table class="min-w-[760px] text-left text-sm">
+        <thead class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          <tr>
+            <th class="py-2 pr-4">Sous-compte</th>
+            <th class="py-2 pr-4">Banque</th>
+            <th class="py-2 pr-4">Intitule</th>
+            <th class="py-2 pr-4">Solde</th>
+            <th class="py-2 pr-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="caisse-manage-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div id="caisse-edit-modal" class="app-modal-layer fixed inset-0 z-[300] hidden items-center justify-center bg-black/45" role="dialog" aria-modal="true" aria-label="Modifier une sous-caisse">
+    <div class="app-modal-panel w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-2xl">
+      <div class="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
+        <div class="min-w-0">
+          <h3 class="text-lg font-bold text-black">Modifier la sous-caisse</h3>
+          <p id="caisse-edit-label" class="mt-1 truncate text-xs text-slate-500"></p>
+        </div>
+        <button type="button" id="caisse-edit-close" class="shrink-0 rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black" aria-label="Fermer">✕</button>
+      </div>
+      <form id="caisse-edit-form" class="space-y-3 px-5 py-5">
+        <input type="hidden" name="caisse_id">
+        <input name="nom" placeholder="Nom du sous-compte" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none" required>
+        <input name="banque_nom" placeholder="Nom de la banque" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <input name="compte_intitule" placeholder="Intitule du compte" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <input name="numero_compte" placeholder="Numero du compte" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-black focus:outline-none">
+        <label class="flex items-center gap-2 text-xs text-slate-700">
+          <input name="actif" type="checkbox" class="h-4 w-4 rounded border-slate-300">
+          Active
+        </label>
+        <div class="app-modal-actions flex justify-end gap-2 pt-2">
+          <button type="button" id="caisse-edit-cancel" class="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Annuler</button>
+          <button type="submit" class="rounded-full bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
+        </div>
+        <p id="caisse-edit-msg" class="text-xs text-slate-600"></p>
+      </form>
+    </div>
+  </div>
 {% endblock %}
 
 {% block extra_js %}
@@ -125,6 +177,22 @@
     return String(v || '').replace(/[&<>"']/g, function(ch){
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
     });
+  }
+
+  function toNumber(v) {
+    var n = parseFloat(String(v || '0').replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function caisseLabel(c) {
+    if (!c) return '';
+    if (c.display_label) return c.display_label;
+    var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
+    return (c.nom || ('Caisse #' + (c.caisse_id || c.id))) + (details ? (' (' + details + ')') : '');
+  }
+
+  function findCaisse(caisseId) {
+    return caissesCache.filter(function(c){ return String(c.caisse_id) === String(caisseId); })[0] || null;
   }
 
   function selectCaissePanel(name) {
@@ -191,10 +259,54 @@
         banque_nom: c.banque_nom || '',
         compte_intitule: c.compte_intitule || '',
         numero_compte: c.numero_compte || '',
+        display_label: c.display_label || '',
         solde: c.solde || '0.00',
         has_transactions: c.has_transactions
       };
     }).filter(function(c) { return !!c.caisse_id; });
+  }
+
+  function renderCaisseManagement(primary) {
+    var tb = document.getElementById('caisse-manage-tbody');
+    var mobile = document.getElementById('caisse-manage-mobile');
+    if (!tb || !mobile) return;
+    tb.innerHTML = '';
+    mobile.innerHTML = '';
+    if (!caissesCache.length) {
+      mobile.innerHTML = '<p class="rounded-xl border border-dashed border-slate-300 px-3 py-8 text-center text-sm text-slate-500">Aucune sous-caisse active.</p>';
+      return;
+    }
+    caissesCache.forEach(function(c) {
+      var label = caisseLabel(c);
+      var balance = money(c.solde || '0.00', primary);
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="max-w-[260px] py-2 pr-4"><p class="truncate font-semibold text-black" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</p>' +
+        (c.numero_compte ? '<p class="mt-0.5 truncate text-xs text-slate-500">' + escapeHtml(c.numero_compte) + '</p>' : '') + '</td>' +
+        '<td class="py-2 pr-4">' + escapeHtml(c.banque_nom || '—') + '</td>' +
+        '<td class="max-w-[220px] py-2 pr-4"><p class="truncate" title="' + escapeHtml(c.compte_intitule || '') + '">' + escapeHtml(c.compte_intitule || '—') + '</p></td>' +
+        '<td class="py-2 pr-4 font-semibold tabular-nums">' + escapeHtml(balance) + '</td>' +
+        '<td class="py-2 pr-4 text-right">' +
+          '<button type="button" class="caisse-edit-btn rounded-xl border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-black" data-id="' + c.caisse_id + '">Modifier</button> ' +
+          '<button type="button" class="caisse-delete-btn rounded-xl border border-red-100 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:border-red-200" data-id="' + c.caisse_id + '">Supprimer</button>' +
+        '</td>';
+      tb.appendChild(tr);
+
+      var card = document.createElement('div');
+      card.className = 'rounded-xl border border-slate-200 bg-white p-3';
+      card.innerHTML =
+        '<div class="flex items-start justify-between gap-3">' +
+          '<div class="min-w-0"><p class="truncate text-sm font-semibold text-black" title="' + escapeHtml(label) + '">' + escapeHtml(label) + '</p>' +
+          '<p class="mt-1 truncate text-xs text-slate-500">' + escapeHtml(c.numero_compte || 'Numero non renseigne') + '</p></div>' +
+          '<p class="max-w-[42%] shrink-0 break-words text-right text-xs font-bold tabular-nums text-black">' + escapeHtml(balance) + '</p>' +
+        '</div>' +
+        '<div class="mt-3 grid grid-cols-2 gap-2">' +
+          '<button type="button" class="caisse-edit-btn rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-800" data-id="' + c.caisse_id + '">Modifier</button>' +
+          '<button type="button" class="caisse-delete-btn rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700" data-id="' + c.caisse_id + '">Supprimer</button>' +
+        '</div>';
+      mobile.appendChild(card);
+    });
+    bindCaisseManagementActions();
   }
 
   function fetchSolde() {
@@ -212,29 +324,30 @@
         var first = null;
         caissesCache = normalizeOperationCaisses(data.available_caisses || []);
         refreshOperationCaisses();
+        renderCaisseManagement(primary);
         (data.results || []).forEach(function (r) {
           var tr = document.createElement('tr');
           if (!first) first = r;
           tr.innerHTML =
-            '<td class="py-2 pr-4 font-semibold text-black">' + escapeHtml(r.nom || ('Caisse #' + r.caisse_id)) + '</td>' +
+            '<td class="py-2 pr-4 font-semibold text-black">' + escapeHtml(caisseLabel(r)) + '</td>' +
             '<td class="py-2 pr-4 tabular-nums font-semibold">' + money(r.solde || '0.00', primary) + '</td>' +
-            '<td class="py-2 pr-4 text-right"><button type="button" class="history-btn rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-black" data-id="' + r.caisse_id + '" data-name="' + escapeHtml(r.nom || ('Caisse #' + r.caisse_id)) + '">Voir</button></td>';
+            '<td class="py-2 pr-4 text-right"><button type="button" class="history-btn rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 hover:border-black" data-id="' + r.caisse_id + '" data-name="' + escapeHtml(caisseLabel(r)) + '">Voir</button></td>';
           tb.appendChild(tr);
           var mobileCard = document.createElement('button');
           mobileCard.type = 'button';
           mobileCard.className = 'history-btn w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-black';
           mobileCard.setAttribute('data-id', r.caisse_id);
-          mobileCard.setAttribute('data-name', r.nom || ('Caisse #' + r.caisse_id));
+          mobileCard.setAttribute('data-name', caisseLabel(r));
           mobileCard.innerHTML =
-            '<div class="flex items-start justify-between gap-3">' +
-            '<div class="min-w-0"><p class="truncate text-sm font-semibold text-black">' + escapeHtml(r.nom || ('Caisse #' + r.caisse_id)) + '</p>' +
-            (r.banque_nom ? '<p class="mt-0.5 truncate text-xs text-slate-500">' + escapeHtml(r.banque_nom) + '</p>' : '') +
+            '<div class="flex min-w-0 items-start justify-between gap-3">' +
+            '<div class="min-w-0 flex-1"><p class="break-words text-sm font-semibold text-black">' + escapeHtml(caisseLabel(r)) + '</p>' +
+            (r.banque_nom ? '<p class="mt-0.5 break-words text-xs text-slate-500">' + escapeHtml(r.banque_nom) + '</p>' : '') +
             '</div>' +
-            '<p class="max-w-[48%] shrink-0 break-words text-right text-sm font-bold tabular-nums text-black">' + money(r.solde || '0.00', primary) + '</p>' +
+            '<p class="max-w-[46%] shrink-0 break-words text-right text-sm font-bold tabular-nums text-black">' + money(r.solde || '0.00', primary) + '</p>' +
             '</div>' +
             '<p class="mt-2 text-[11px] font-semibold text-slate-500">Voir les transactions</p>';
           mobileList.appendChild(mobileCard);
-          labels.push(r.nom || ('#' + r.caisse_id));
+          labels.push(caisseLabel(r));
           values.push(Math.max(0, parseFloat(r.solde || '0') || 0));
         });
         if (!(data.results || []).length) {
@@ -246,10 +359,10 @@
           });
         });
         if (!selectedCaisseId && first) {
-          fetchRecent(first.caisse_id, first.nom || ('Caisse #' + first.caisse_id));
+          fetchRecent(first.caisse_id, caisseLabel(first));
         } else if (selectedCaisseId) {
           var active = (data.results || []).filter(function(r){ return String(r.caisse_id) === String(selectedCaisseId); })[0];
-          if (active) fetchRecent(active.caisse_id, active.nom || ('Caisse #' + active.caisse_id));
+          if (active) fetchRecent(active.caisse_id, caisseLabel(active));
         }
         document.getElementById('caisse-pager').textContent = (data.results || []).length + ' caisses (stats)';
 
@@ -288,7 +401,7 @@
               maintainAspectRatio: false,
               plugins: {
                 legend: {
-                  display: window.innerWidth >= 640,
+                  display: window.innerWidth >= 768,
                   position: 'bottom',
                   labels: { color: '#0f172a', boxWidth: 10, boxHeight: 10, padding: 12, font: { size: 10 } }
                 }
@@ -304,23 +417,80 @@
       });
   }
 
-  function refreshCaisseSelect(selectId) {
+  function refreshCaisseSelect(selectId, rows) {
     var sel = document.getElementById(selectId);
     if (!sel) return;
     var current = sel.value;
     sel.innerHTML = '<option value="">— Sous-compte concerne —</option>';
-    caissesCache.forEach(function(c){
+    (rows || []).forEach(function(c){
       var opt = document.createElement('option');
       opt.value = c.caisse_id;
-      opt.textContent = (c.nom || ('Caisse #' + c.caisse_id)) + (c.has_transactions === false ? ' (aucune transaction)' : '');
+      opt.textContent = caisseLabel(c);
+      opt.title = caisseLabel(c);
       sel.appendChild(opt);
     });
+    if (!(rows || []).length && selectId === 'sortie-caisse-select') {
+      var empty = document.createElement('option');
+      empty.value = '';
+      empty.textContent = 'Aucune sous-caisse avec fonds disponibles';
+      empty.disabled = true;
+      sel.appendChild(empty);
+    }
     sel.value = current;
   }
 
   function refreshOperationCaisses() {
-    refreshCaisseSelect('sortie-caisse-select');
-    refreshCaisseSelect('entree-caisse-select');
+    refreshCaisseSelect('entree-caisse-select', caissesCache);
+    refreshCaisseSelect('sortie-caisse-select', caissesCache.filter(function(c){ return toNumber(c.solde) > 0; }));
+  }
+
+  function openEditModal(caisseId) {
+    var c = findCaisse(caisseId);
+    if (!c) return;
+    var modal = document.getElementById('caisse-edit-modal');
+    var form = document.getElementById('caisse-edit-form');
+    document.getElementById('caisse-edit-msg').textContent = '';
+    document.getElementById('caisse-edit-label').textContent = caisseLabel(c);
+    form.caisse_id.value = c.caisse_id;
+    form.nom.value = c.nom || '';
+    form.banque_nom.value = c.banque_nom || '';
+    form.compte_intitule.value = c.compte_intitule || '';
+    form.numero_compte.value = c.numero_compte || '';
+    form.actif.checked = true;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeEditModal() {
+    var modal = document.getElementById('caisse-edit-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+
+  function bindCaisseManagementActions() {
+    document.querySelectorAll('.caisse-edit-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        openEditModal(btn.getAttribute('data-id'));
+      });
+    });
+    document.querySelectorAll('.caisse-delete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var caisseId = btn.getAttribute('data-id');
+        var c = findCaisse(caisseId);
+        if (!confirm('Supprimer cette sous-caisse ?\n' + caisseLabel(c))) return;
+        fetch('/magasin/caisse/api/caisses/' + encodeURIComponent(caisseId) + '/supprimer/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+          body: JSON.stringify({})
+        })
+          .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
+          .then(function(res){
+            if (!res.ok || !res.json.ok) { alert(res.json.error || 'Erreur.'); return; }
+            fetchSolde();
+          })
+          .catch(function(){ alert('Erreur reseau.'); });
+      });
+    });
   }
 
   document.querySelectorAll('[data-caisse-panel-tab]').forEach(function(btn) {
@@ -336,6 +506,42 @@
   document.getElementById('caisse-refresh').addEventListener('click', function (e) {
     e.preventDefault();
     fetchSolde();
+  });
+
+  document.getElementById('caisse-edit-close').addEventListener('click', closeEditModal);
+  document.getElementById('caisse-edit-cancel').addEventListener('click', closeEditModal);
+  document.getElementById('caisse-edit-modal').addEventListener('click', function(e) {
+    if (e.target.id === 'caisse-edit-modal') closeEditModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeEditModal();
+  });
+
+  document.getElementById('caisse-edit-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var form = e.target;
+    var caisseId = form.caisse_id.value;
+    var msg = document.getElementById('caisse-edit-msg');
+    msg.textContent = 'Enregistrement...';
+    fetch('/magasin/caisse/api/caisses/' + encodeURIComponent(caisseId) + '/modifier/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRFToken': (window.CSRF_TOKEN || '') },
+      body: JSON.stringify({
+        nom: form.nom.value,
+        banque_nom: form.banque_nom.value,
+        compte_intitule: form.compte_intitule.value,
+        numero_compte: form.numero_compte.value,
+        actif: !!form.actif.checked
+      })
+    })
+      .then(function(r){ return r.json().then(function(j){ return { ok: r.ok, json: j }; }); })
+      .then(function(res){
+        if (!res.ok || !res.json.ok) { msg.textContent = res.json.error || 'Erreur.'; return; }
+        msg.textContent = 'Sous-caisse mise a jour.';
+        closeEditModal();
+        fetchSolde();
+      })
+      .catch(function(){ msg.textContent = 'Erreur reseau.'; });
   });
 
   document.getElementById('caisse-create-form').addEventListener('submit', function (e) {

@@ -9,6 +9,14 @@ from pathlib import Path
 from django.conf import settings
 
 
+def article_display_label(nom: str, type_label: str = '', sous_type_label: str = '') -> str:
+    """Construit le libelle court utilise dans les champs de selection d'articles."""
+    article_name = (nom or '').strip()
+    type_name = (type_label or 'Type non renseigne').strip()
+    sous_type_name = (sous_type_label or 'Sous-type non renseigne').strip()
+    return f'{article_name}({type_name} + {sous_type_name})'
+
+
 def normalize_images_json(items: list) -> list:
     """
     Garde une liste d’objets {image: str, is_main: bool}.
