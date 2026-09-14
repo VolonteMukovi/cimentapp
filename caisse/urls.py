@@ -12,6 +12,7 @@ urlpatterns = [
     path('api/caisses/<int:caisse_id>/mouvements-recents/', views.CaisseRecentMouvementsApiView.as_view(), name='api_caisses_recent_mouvements'),
     path('api/entree/', views.CaisseEntreeApiView.as_view(), name='api_caisses_entree'),
     path('api/sortie/', views.CaisseSortieApiView.as_view(), name='api_caisses_sortie'),
+    path('api/transfert/', views.CaisseTransfertApiView.as_view(), name='api_caisses_transfert'),
     path('api/solde/', views.CaisseSoldeApiView.as_view(), name='api_caisses_solde'),
     path('api/stats/', views.CaisseStatsApiView.as_view(), name='api_caisses_stats'),
 ]
