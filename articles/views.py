@@ -20,7 +20,7 @@ from django.views.generic import FormView, ListView, TemplateView
 from articles.currency import get_primary_currency_code
 from articles.forms import ArticleForm, DeviseForm, SousTypeArticleForm, TypeArticleForm, UniteForm
 from articles.models import Article, Devise, SousTypeArticle, TypeArticle, Unite
-from articles.utils import build_images_from_post, delete_article_media
+from articles.utils import article_display_label, build_images_from_post, delete_article_media
 from users.constants import SESSION_ACTIVE_ENTREPRISE_ID
 from users.models import User
 from users.navigation import can_access_store_module
@@ -437,11 +437,23 @@ class ArticlesApiListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View):
             qs = qs.filter(Q(nom__icontains=q) | Q(article_id__icontains=q))
 
         rows, count, page, page_size = _paginate(qs, request)
+        sous_type_ids = {a.sous_type_article_id for a in rows}
+        sous_types = {
+            row.id: row
+            for row in SousTypeArticle.objects.filter(id__in=sous_type_ids)
+        }
+        type_ids = {row.type_article_id for row in sous_types.values()}
+        types = {
+            row.id: row
+            for row in TypeArticle.objects.filter(id__in=type_ids)
+        }
         mu = settings.MEDIA_URL
         if not str(mu).endswith('/'):
             mu = f'{mu}/'
         results = []
         for a in rows:
+            sous_type = sous_types.get(a.sous_type_article_id)
+            type_article = types.get(sous_type.type_article_id) if sous_type else None
             main_img = ''
             if isinstance(a.images, list):
                 for im in a.images:
@@ -457,6 +469,13 @@ class ArticlesApiListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View):
                 {
                     'article_id': a.article_id,
                     'nom': a.nom,
+                    'type_article': type_article.libelle if type_article else '',
+                    'sous_type_article': sous_type.libelle if sous_type else '',
+                    'display_label': article_display_label(
+                        a.nom,
+                        type_article.libelle if type_article else '',
+                        sous_type.libelle if sous_type else '',
+                    ),
                     'prix_catalogue': str(a.prix_catalogue),
                     'image': main_img,
                     'entreprise_id': a.entreprise_id,

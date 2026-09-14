@@ -24,6 +24,15 @@
     .art-modal-overlay { align-items: center; padding: 1rem; }
   }
   .art-modal-panel { max-height: min(90vh, 820px); }
+  .art-edit-actions { display: grid; grid-template-columns: 1fr; }
+  .art-edit-actions > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 639px) {
+    .art-edit-actions { bottom: calc(2.3rem + env(safe-area-inset-bottom, 0px)); }
+  }
+  @media (min-width: 640px) {
+    .art-edit-actions { display: flex; }
+    .art-edit-actions > div { display: flex; }
+  }
   .art-img-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
@@ -395,8 +404,8 @@
   </div>
 </section>
 
-<div id="modal-create" class="art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-create-title" aria-modal="true">
-  <div class="art-modal-panel mt-auto w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
+<div id="modal-create" class="app-modal-layer art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-create-title" aria-modal="true">
+  <div class="app-modal-panel art-modal-panel mt-auto w-full max-w-2xl rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
     <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
       <h2 id="modal-create-title" class="text-lg font-bold text-black">Nouvel article</h2>
       <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-close" data-close="modal-create" aria-label="Fermer">✕</button>
@@ -420,7 +429,7 @@
         <div id="create-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
         <p id="create-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image sélectionnée — utilisez le champ ci-dessus pour en ajouter.</p>
       </div>
-      <div class="flex justify-end gap-2 pt-2">
+      <div class="app-modal-actions flex justify-end gap-2 pt-2">
         <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-create">Annuler</button>
         <button type="submit" class="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
       </div>
@@ -428,8 +437,8 @@
   </div>
 </div>
 
-<div id="modal-edit" class="art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-edit-title" aria-modal="true">
-  <div class="art-modal-panel mt-auto w-full max-w-2xl overflow-y-auto rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
+<div id="modal-edit" class="app-modal-layer art-modal-overlay fixed inset-0 flex bg-black/45" style="display:none" role="dialog" aria-labelledby="modal-edit-title" aria-modal="true">
+  <div class="app-modal-panel art-modal-panel mt-auto w-full max-w-2xl rounded-t-3xl border border-slate-200 bg-white shadow-2xl sm:mt-0 sm:rounded-3xl">
     <div class="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">
       <h2 id="modal-edit-title" class="text-lg font-bold text-black">Modifier l’article</h2>
       <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-close" data-close="modal-edit" aria-label="Fermer">✕</button>
@@ -453,7 +462,7 @@
         <div id="edit-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
         <p id="edit-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image — ajoutez-en avec le champ ci-dessus.</p>
       </div>
-      <div class="flex flex-wrap justify-between gap-2 pt-2">
+      <div class="app-modal-actions art-edit-actions flex flex-wrap justify-between gap-2 pt-2">
         <button type="button" id="btn-open-delete" class="rounded-full border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50">Supprimer…</button>
         <div class="flex gap-2">
           <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-edit">Annuler</button>

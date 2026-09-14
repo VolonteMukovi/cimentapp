@@ -12,7 +12,8 @@ from django.utils import timezone
 from django.views.generic import ListView, View
 
 from articles.currency import get_primary_currency_code, to_primary_amount
-from articles.models import Article, Unite
+from articles.models import Article, SousTypeArticle, TypeArticle, Unite
+from articles.utils import article_display_label
 from caisse.models import CaisseCompte
 from commandes.models import ClientDettePaiement, ClientSoldeMouvement, Commande, CommandeLigne
 from users.constants import SESSION_CLIENT_ACTIVE_ENTREPRISE_ID, SESSION_CLIENT_ID
@@ -369,16 +370,41 @@ class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
         if q:
             aqs = aqs.filter(nom__icontains=q)
         aqs = aqs.order_by('nom')[:200]
+        article_rows = list(aqs)
+        sous_types = {
+            row.id: row
+            for row in SousTypeArticle.objects.filter(id__in={a.sous_type_article_id for a in article_rows})
+        }
+        types = {
+            row.id: row
+            for row in TypeArticle.objects.filter(id__in={s.type_article_id for s in sous_types.values()})
+        }
         articles = [
             {
                 'article_id': a.article_id,
                 'nom': a.nom,
+                'type_article': types.get(sous_types.get(a.sous_type_article_id).type_article_id).libelle
+                if sous_types.get(a.sous_type_article_id) and types.get(sous_types.get(a.sous_type_article_id).type_article_id)
+                else '',
+                'sous_type_article': sous_types.get(a.sous_type_article_id).libelle
+                if sous_types.get(a.sous_type_article_id)
+                else '',
+                'display_label': article_display_label(
+                    a.nom,
+                    types.get(sous_types.get(a.sous_type_article_id).type_article_id).libelle
+                    if sous_types.get(a.sous_type_article_id)
+                    and types.get(sous_types.get(a.sous_type_article_id).type_article_id)
+                    else '',
+                    sous_types.get(a.sous_type_article_id).libelle
+                    if sous_types.get(a.sous_type_article_id)
+                    else '',
+                ),
                 'prix_catalogue': str(a.prix_catalogue),
             }
-            for a in aqs
+            for a in article_rows
         ]
 
-        caisses_qs = CaisseCompte.objects.filter(entreprise_id=self.entreprise_id, actif=True).order_by('nom')[:200]
+        caisses_qs = CaisseCompte.objects.filter(entreprise_id=self.entreprise_id, actif=True).order_by('nom')[:1000]
         caisses = [
             {
                 'id': c.id,
@@ -386,6 +412,9 @@ class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
                 'banque_nom': c.banque_nom,
                 'compte_intitule': c.compte_intitule,
                 'numero_compte': c.numero_compte,
+                'display_label': f"{c.nom} ({' + '.join(x for x in (c.banque_nom, c.compte_intitule) if x)})"
+                if (c.banque_nom or c.compte_intitule)
+                else c.nom,
             }
             for c in caisses_qs
         ]

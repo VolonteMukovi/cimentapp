@@ -38,21 +38,26 @@
 (function () {
   var caisses = [];
 
+  function caisseLabel(c) {
+    if (c.display_label) return c.display_label;
+    var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
+    return c.nom + (details ? (' (' + details + ')') : '');
+  }
+
   function bootCaisses() {
-    return fetch('/magasin/caisse/api/caisses/?page=1&page_size=200&actif=true', { headers: { 'Accept': 'application/json' }})
+    return fetch('/magasin/caisse/api/caisses/?page=1&page_size=1000&actif=true', { headers: { 'Accept': 'application/json' }})
       .then(function(r){ return r.json(); })
       .then(function(data){ caisses = data.results || []; })
       .catch(function(){ caisses = []; });
   }
 
   function promptDepot(cmd) {
-    var caisseLabel = (cmd.caisse_id ? ('#' + cmd.caisse_id) : '');
     var devise = cmd.devise || cmd.devise_principale || '';
     var montant = prompt('Montant dépôt' + (devise ? (' (' + devise + ')') : ''), cmd.total || '0.00');
     if (!montant) return Promise.resolve();
     var caisseId = cmd.caisse_id;
     if (!caisseId) {
-      var list = (caisses || []).map(function(c){ return c.id + ' - ' + c.nom; }).join('\n');
+      var list = (caisses || []).map(function(c){ return c.id + ' - ' + caisseLabel(c); }).join('\n');
       var pick = prompt('Choisir une caisse (id)\n' + list, (caisses[0] && caisses[0].id) ? String(caisses[0].id) : '');
       caisseId = pick;
     }
