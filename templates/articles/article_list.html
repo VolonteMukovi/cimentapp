@@ -28,6 +28,7 @@
   .art-edit-actions > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   @media (max-width: 639px) {
     .art-edit-actions { bottom: calc(2.3rem + env(safe-area-inset-bottom, 0px)); }
+    .art-create-actions { bottom: calc(2.25rem + env(safe-area-inset-bottom, 0px)); }
   }
   @media (min-width: 640px) {
     .art-edit-actions { display: flex; }
@@ -429,7 +430,7 @@
         <div id="create-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
         <p id="create-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image sélectionnée — utilisez le champ ci-dessus pour en ajouter.</p>
       </div>
-      <div class="app-modal-actions flex justify-end gap-2 pt-2">
+      <div class="app-modal-actions art-create-actions flex justify-end gap-2 pt-2">
         <button type="button" class="rounded-full border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 art-close" data-close="modal-create">Annuler</button>
         <button type="submit" class="rounded-full bg-black px-5 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800">Enregistrer</button>
       </div>
