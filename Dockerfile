@@ -7,7 +7,7 @@ RUN mkdir /cimentapp
 WORKDIR /cimentapp
 
 # 🔥 INSTALL DEPENDANCES SYSTEME (IMPORTANT)
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     pkg-config \
     default-libmysqlclient-dev \

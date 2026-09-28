@@ -24,6 +24,7 @@ env/
 *.log
 db.sqlite3
 media/
+tmp/
 staticfiles/
 
 # Tests / coverage

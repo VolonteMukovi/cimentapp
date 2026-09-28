@@ -12,11 +12,11 @@ done
 echo "Apply migrations..."
 python manage.py migrate
 
-echo "Ensure media directory exists..."
-mkdir -p /cimentapp/media
+echo "Ensure media and upload temp directories exist..."
+mkdir -p /cimentapp/media /cimentapp/tmp
 
 echo "Rassemblement des fichiers statiques..."
 python manage.py collectstatic --noinput
 
 echo "Starting server..."
-exec gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 3
+exec gunicorn config.wsgi:application -c /cimentapp/gunicorn.conf.py
