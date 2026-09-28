@@ -181,7 +181,9 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('FILE_UPLOAD_MAX_MEMORY_SIZE', str(1
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('DATA_UPLOAD_MAX_MEMORY_SIZE', str(8 * 1024 * 1024)))
 DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.getenv('DATA_UPLOAD_MAX_NUMBER_FIELDS', '2000'))
 MAX_UPLOAD_BYTES = int(os.getenv('MAX_UPLOAD_MB', '20')) * 1024 * 1024
-FILE_UPLOAD_TEMP_DIR = os.getenv('FILE_UPLOAD_TEMP_DIR', str(BASE_DIR / 'tmp'))
+_upload_tmp = Path(os.getenv('FILE_UPLOAD_TEMP_DIR', str(BASE_DIR / 'tmp')))
+_upload_tmp.mkdir(parents=True, exist_ok=True)
+FILE_UPLOAD_TEMP_DIR = str(_upload_tmp)
 
 # ========================
 # DEFAULT PRIMARY KEY
