@@ -77,7 +77,13 @@ class ClientOrdersView(ClientPortalRequiredMixin, ListView):
             )
         }
         unite_ids = sorted({article.unite_id for article in articles.values()})
-        unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'code', 'libelle')}
+        unites = {
+            unite.id: unite
+            for unite in Unite.objects.filter(
+                entreprise_id=self.entreprise_id,
+                id__in=unite_ids,
+            ).only('id', 'code', 'libelle')
+        }
 
         ventes_by_cmd = {
             v.commande_id: v
@@ -104,7 +110,7 @@ class ClientOrdersView(ClientPortalRequiredMixin, ListView):
             for line in lines:
                 article = articles.get(line.article_id)
                 unite = unites.get(article.unite_id) if article else None
-                line.client_article_nom = article.nom if article else line.article_id
+                line.client_article_nom = article.nom if article else 'Article supprimé'
                 line.client_unite_mesure = (unite.libelle or unite.code) if unite else 'unite(s)'
             vente = ventes_by_cmd.get(order.commande_id)
             order.client_vente_creee = bool(vente)
@@ -152,14 +158,20 @@ class ClientCommandePreuveView(ClientPortalRequiredMixin, View):
             ).only('article_id', 'nom', 'unite_id')
         }
         unite_ids = [article.unite_id for article in articles.values()]
-        unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
+        unites = {
+            unite.id: unite
+            for unite in Unite.objects.filter(
+                entreprise_id=self.entreprise_id,
+                id__in=unite_ids,
+            ).only('id', 'libelle', 'code')
+        }
         produits = []
         for line in vente_lignes:
             article = articles.get(line.article_id)
             unite = unites.get(article.unite_id) if article else None
             produits.append(
                 {
-                    'nom': article.nom if article else line.article_id,
+                    'nom': article.nom if article else 'Article supprimé',
                     'quantite': line.quantite,
                     'unite': (unite.libelle or unite.code) if unite else '',
                     'prix_unitaire': line.prix_unitaire_vente,
@@ -373,11 +385,17 @@ class ClientOrderLookupsApiView(ClientPortalRequiredMixin, View):
         article_rows = list(aqs)
         sous_types = {
             row.id: row
-            for row in SousTypeArticle.objects.filter(id__in={a.sous_type_article_id for a in article_rows})
+            for row in SousTypeArticle.objects.filter(
+                entreprise_id=self.entreprise_id,
+                id__in={a.sous_type_article_id for a in article_rows},
+            )
         }
         types = {
             row.id: row
-            for row in TypeArticle.objects.filter(id__in={s.type_article_id for s in sous_types.values()})
+            for row in TypeArticle.objects.filter(
+                entreprise_id=self.entreprise_id,
+                id__in={s.type_article_id for s in sous_types.values()},
+            )
         }
         articles = [
             {
@@ -569,4 +587,3 @@ class ClientTransactionsStatsApiView(ClientPortalRequiredMixin, View):
             {'results': out, 'count': len(out), 'page': 1, 'page_size': 25, 'devise_principale': get_primary_currency_code(self.entreprise_id)},
             status=200,
         )
-

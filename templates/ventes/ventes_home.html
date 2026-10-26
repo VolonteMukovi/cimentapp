@@ -94,7 +94,7 @@
     articlesCache.forEach(function(a){
       var opt = document.createElement('option');
       opt.value = a.article_id;
-      opt.textContent = a.display_label || (a.nom + ' (' + a.article_id + ')');
+      opt.textContent = a.display_label || a.nom;
       opt.setAttribute('data-prix', a.prix_catalogue);
       select.appendChild(opt);
     });
@@ -286,4 +286,3 @@
 })();
 </script>
 {% endblock %}
-

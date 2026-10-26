@@ -29,6 +29,10 @@ from users.navigation import can_access_store_module
 class ArticleStoreAccessMixin(LoginRequiredMixin):
     """Connexion staff + droit module articles."""
 
+    def active_entreprise_id(self):
+        eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        return int(eid) if eid is not None else None
+
     def dispatch(self, request, *args, **kwargs):
         if not request.user.is_authenticated or not isinstance(request.user, User):
             return self.handle_no_permission()
@@ -115,8 +119,19 @@ class ArticleListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['form_create'] = ArticleForm(prefix='create')
-        ctx['form_edit'] = ArticleForm(prefix='edit')
+        eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
+        eid = int(eid) if eid is not None else None
+        ctx['form_create'] = ArticleForm(prefix='create', entreprise_id=eid)
+        include_all_settings = (
+            eid is None
+            and isinstance(self.request.user, User)
+            and self.request.user.is_superadmin_role()
+        )
+        ctx['form_edit'] = ArticleForm(
+            prefix='edit',
+            entreprise_id=eid,
+            include_all_settings=include_all_settings,
+        )
         ctx['MEDIA_URL'] = settings.MEDIA_URL
         ctx['search_q'] = (self.request.GET.get('q') or '').strip()
         ctx['filter_sous_type'] = self.request.GET.get('sous_type') or ''
@@ -129,8 +144,8 @@ class ArticleListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, ListView):
             del qcopy['page']
         qs = qcopy.urlencode()
         ctx['pagination_prefix'] = ('?' + qs + '&') if qs else '?'
-        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
-        ctx['unites'] = Unite.objects.filter(actif=True).order_by('libelle')
+        ctx['sous_types'] = SousTypeArticle.objects.filter(entreprise_id=eid).order_by('type_article_id', 'libelle') if eid is not None else SousTypeArticle.objects.none()
+        ctx['unites'] = Unite.objects.filter(entreprise_id=eid, actif=True).order_by('libelle') if eid is not None else Unite.objects.none()
         ctx['total_filtered'] = self.get_base_queryset().count()
         page_items = list(ctx.get('articles') or [])
         ids_st = {a.sous_type_article_id for a in page_items}
@@ -174,6 +189,7 @@ class ArticleCreateView(ArticleStoreAccessMixin, ArticleQuerysetMixin, FormView)
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'create'
+        kwargs['entreprise_id'] = self.active_entreprise_id()
         return kwargs
 
     def form_valid(self, form):
@@ -218,6 +234,7 @@ class ArticleUpdateView(ArticleStoreAccessMixin, ArticleQuerysetMixin, FormView)
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'edit'
         kwargs['instance'] = self.article
+        kwargs['entreprise_id'] = self.article.entreprise_id
         return kwargs
 
     def form_valid(self, form):
@@ -262,8 +279,8 @@ class ArticleJsonDetailView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View)
         art = self.scoped_articles().filter(pk=article_id).first()
         if not art:
             return JsonResponse({'ok': False, 'error': 'Introuvable'}, status=404)
-        st = SousTypeArticle.objects.filter(pk=art.sous_type_article_id).first()
-        u = Unite.objects.filter(pk=art.unite_id).first()
+        st = SousTypeArticle.objects.filter(pk=art.sous_type_article_id, entreprise_id=art.entreprise_id).first()
+        u = Unite.objects.filter(pk=art.unite_id, entreprise_id=art.entreprise_id).first()
         images = art.images if isinstance(art.images, list) else []
         return JsonResponse(
             {
@@ -292,17 +309,18 @@ class ArticleSettingsView(ArticleStoreAccessMixin, TemplateView):
             tab = 'unites'
         ctx['active_tab'] = tab
 
-        eid = self.request.session.get(SESSION_ACTIVE_ENTREPRISE_ID)
-        ctx['unites'] = Unite.objects.all().order_by('libelle')
-        ctx['types'] = TypeArticle.objects.all().order_by('libelle')
-        ctx['sous_types'] = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
-        ctx['devises'] = Devise.objects.filter(entreprise_id=int(eid)).order_by('-principale', 'code') if eid else []
-        ctx['devise_principale_code'] = get_primary_currency_code(int(eid)) if eid else get_primary_currency_code(None)
+        eid = self.active_entreprise_id()
+        ctx['active_entreprise_id'] = eid
+        ctx['unites'] = Unite.objects.filter(entreprise_id=eid).order_by('libelle') if eid is not None else Unite.objects.none()
+        ctx['types'] = TypeArticle.objects.filter(entreprise_id=eid).order_by('libelle') if eid is not None else TypeArticle.objects.none()
+        ctx['sous_types'] = SousTypeArticle.objects.filter(entreprise_id=eid).order_by('type_article_id', 'libelle') if eid is not None else SousTypeArticle.objects.none()
+        ctx['devises'] = Devise.objects.filter(entreprise_id=eid).order_by('-principale', 'code') if eid is not None else []
+        ctx['devise_principale_code'] = get_primary_currency_code(eid)
 
-        ctx['form_unite'] = UniteForm(prefix='unite')
+        ctx['form_unite'] = UniteForm(prefix='unite', entreprise_id=eid)
         ctx['form_devise'] = DeviseForm(prefix='devise', initial={'actif': True, 'taux_vers_principale': Decimal('1')})
         ctx['form_type'] = TypeArticleForm(prefix='type')
-        ctx['form_sous_type'] = SousTypeArticleForm(prefix='sous_type')
+        ctx['form_sous_type'] = SousTypeArticleForm(prefix='sous_type', entreprise_id=eid)
         return ctx
 
 
@@ -438,22 +456,23 @@ class ArticlesApiListView(ArticleStoreAccessMixin, ArticleQuerysetMixin, View):
 
         rows, count, page, page_size = _paginate(qs, request)
         sous_type_ids = {a.sous_type_article_id for a in rows}
+        entreprise_ids = {a.entreprise_id for a in rows}
         sous_types = {
-            row.id: row
-            for row in SousTypeArticle.objects.filter(id__in=sous_type_ids)
+            (row.entreprise_id, row.id): row
+            for row in SousTypeArticle.objects.filter(entreprise_id__in=entreprise_ids, id__in=sous_type_ids)
         }
         type_ids = {row.type_article_id for row in sous_types.values()}
         types = {
-            row.id: row
-            for row in TypeArticle.objects.filter(id__in=type_ids)
+            (row.entreprise_id, row.id): row
+            for row in TypeArticle.objects.filter(entreprise_id__in=entreprise_ids, id__in=type_ids)
         }
         mu = settings.MEDIA_URL
         if not str(mu).endswith('/'):
             mu = f'{mu}/'
         results = []
         for a in rows:
-            sous_type = sous_types.get(a.sous_type_article_id)
-            type_article = types.get(sous_type.type_article_id) if sous_type else None
+            sous_type = sous_types.get((a.entreprise_id, a.sous_type_article_id))
+            type_article = types.get((a.entreprise_id, sous_type.type_article_id)) if sous_type else None
             main_img = ''
             if isinstance(a.images, list):
                 for im in a.images:
@@ -491,10 +510,17 @@ class UniteCreateView(ArticleStoreAccessMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'unite'
+        kwargs['entreprise_id'] = self.active_entreprise_id()
         return kwargs
 
     def form_valid(self, form):
-        form.save()
+        eid = self.active_entreprise_id()
+        if eid is None:
+            messages.error(self.request, 'Sélectionnez une entreprise active pour configurer les unités.')
+            return redirect(reverse('store_articles_settings') + '?tab=unites')
+        obj = form.save(commit=False)
+        obj.entreprise_id = eid
+        obj.save()
         messages.success(self.request, 'Unité enregistrée.')
         return redirect(reverse('store_articles_settings') + '?tab=unites')
 
@@ -510,7 +536,8 @@ class UniteUpdateView(ArticleStoreAccessMixin, FormView):
     http_method_names = ['post']
 
     def dispatch(self, request, *args, **kwargs):
-        self.obj = Unite.objects.filter(pk=kwargs['unite_id']).first()
+        eid = self.active_entreprise_id()
+        self.obj = Unite.objects.filter(pk=kwargs['unite_id'], entreprise_id=eid).first() if eid is not None else None
         if not self.obj:
             raise Http404('Unité introuvable.')
         return super().dispatch(request, *args, **kwargs)
@@ -519,6 +546,7 @@ class UniteUpdateView(ArticleStoreAccessMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'unite_edit'
         kwargs['instance'] = self.obj
+        kwargs['entreprise_id'] = self.obj.entreprise_id
         return kwargs
 
     def form_valid(self, form):
@@ -537,7 +565,8 @@ class UniteDeleteView(ArticleStoreAccessMixin, View):
     http_method_names = ['post']
 
     def post(self, request, unite_id):
-        obj = Unite.objects.filter(pk=unite_id).first()
+        eid = self.active_entreprise_id()
+        obj = Unite.objects.filter(pk=unite_id, entreprise_id=eid).first() if eid is not None else None
         if not obj:
             raise Http404('Unité introuvable.')
         obj.delete()
@@ -555,7 +584,13 @@ class TypeArticleCreateView(ArticleStoreAccessMixin, FormView):
         return kwargs
 
     def form_valid(self, form):
-        form.save()
+        eid = self.active_entreprise_id()
+        if eid is None:
+            messages.error(self.request, 'Sélectionnez une entreprise active pour configurer les types.')
+            return redirect(reverse('store_articles_settings') + '?tab=types')
+        obj = form.save(commit=False)
+        obj.entreprise_id = eid
+        obj.save()
         messages.success(self.request, 'Type enregistré.')
         return redirect(reverse('store_articles_settings') + '?tab=types')
 
@@ -573,9 +608,13 @@ class SousTypeArticleCreateView(ArticleStoreAccessMixin, FormView):
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'sous_type'
+        kwargs['entreprise_id'] = self.active_entreprise_id()
         return kwargs
 
     def form_valid(self, form):
+        if self.active_entreprise_id() is None:
+            messages.error(self.request, 'Sélectionnez une entreprise active pour configurer les sous-types.')
+            return redirect(reverse('store_articles_settings') + '?tab=types')
         form.save()
         messages.success(self.request, 'Sous-type enregistré.')
         return redirect(reverse('store_articles_settings') + '?tab=types')
@@ -592,7 +631,8 @@ class TypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
     http_method_names = ['post']
 
     def dispatch(self, request, *args, **kwargs):
-        self.obj = TypeArticle.objects.filter(pk=kwargs['type_id']).first()
+        eid = self.active_entreprise_id()
+        self.obj = TypeArticle.objects.filter(pk=kwargs['type_id'], entreprise_id=eid).first() if eid is not None else None
         if not self.obj:
             raise Http404('Type introuvable.')
         return super().dispatch(request, *args, **kwargs)
@@ -619,7 +659,8 @@ class TypeArticleDeleteView(ArticleStoreAccessMixin, View):
     http_method_names = ['post']
 
     def post(self, request, type_id):
-        obj = TypeArticle.objects.filter(pk=type_id).first()
+        eid = self.active_entreprise_id()
+        obj = TypeArticle.objects.filter(pk=type_id, entreprise_id=eid).first() if eid is not None else None
         if not obj:
             raise Http404('Type introuvable.')
         obj.delete()
@@ -632,7 +673,8 @@ class SousTypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
     http_method_names = ['post']
 
     def dispatch(self, request, *args, **kwargs):
-        self.obj = SousTypeArticle.objects.filter(pk=kwargs['soustype_id']).first()
+        eid = self.active_entreprise_id()
+        self.obj = SousTypeArticle.objects.filter(pk=kwargs['soustype_id'], entreprise_id=eid).first() if eid is not None else None
         if not self.obj:
             raise Http404('Sous-type introuvable.')
         return super().dispatch(request, *args, **kwargs)
@@ -641,6 +683,7 @@ class SousTypeArticleUpdateView(ArticleStoreAccessMixin, FormView):
         kwargs = super().get_form_kwargs()
         kwargs['prefix'] = 'sous_type'
         kwargs['instance'] = self.obj
+        kwargs['entreprise_id'] = self.obj.entreprise_id
         return kwargs
 
     def form_valid(self, form):
@@ -659,7 +702,8 @@ class SousTypeArticleDeleteView(ArticleStoreAccessMixin, View):
     http_method_names = ['post']
 
     def post(self, request, soustype_id):
-        obj = SousTypeArticle.objects.filter(pk=soustype_id).first()
+        eid = self.active_entreprise_id()
+        obj = SousTypeArticle.objects.filter(pk=soustype_id, entreprise_id=eid).first() if eid is not None else None
         if not obj:
             raise Http404('Sous-type introuvable.')
         obj.delete()

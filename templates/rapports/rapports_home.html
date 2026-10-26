@@ -172,7 +172,7 @@
       var tr = document.createElement('tr');
       tr.innerHTML =
         '<td class="py-3 pr-4 font-semibold text-black">' + escapeHtml(row.lot_reference) + '</td>' +
-        '<td class="py-3 pr-4"><p class="font-semibold text-black">' + escapeHtml(row.article_nom) + '</p><p class="font-mono text-[10px] text-slate-400">' + escapeHtml(row.article_id) + '</p></td>' +
+        '<td class="py-3 pr-4 font-semibold text-black">' + escapeHtml(row.article_nom) + '</td>' +
         '<td class="py-3 pr-4 tabular-nums">' + escapeHtml(row.quantite_vendue_fifo) + ' ' + escapeHtml(row.unite) + '</td>' +
         '<td class="py-3 pr-4 tabular-nums">' + money(row.chiffre_affaires) + '</td>' +
         '<td class="py-3 pr-4 tabular-nums">' + money(row.cout_total_fifo) + '</td>' +

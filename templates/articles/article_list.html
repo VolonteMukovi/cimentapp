@@ -27,21 +27,46 @@
   .art-edit-actions { display: grid; grid-template-columns: 1fr; }
   .art-edit-actions > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   @media (max-width: 639px) {
-    .art-edit-actions { bottom: calc(2.75rem + env(safe-area-inset-bottom, 0px)); }
     .art-create-actions { bottom: calc(2.25rem + env(safe-area-inset-bottom, 0px)); }
+    #modal-edit {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+    }
+    #modal-edit .art-modal-panel {
+      max-height: calc(100dvh - 5rem - env(safe-area-inset-bottom, 0px));
+    }
+    #form-edit-article {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+    #form-edit-article .art-edit-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+    #form-edit-article .art-edit-actions {
+      position: static;
+      flex: 0 0 auto;
+    }
   }
   @media (min-width: 640px) {
     .art-edit-actions { display: flex; }
     .art-edit-actions > div { display: flex; }
   }
   .art-img-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+    display: flex;
+    flex-wrap: wrap;
     gap: 0.65rem;
   }
   .art-img-tile {
     position: relative;
-    aspect-ratio: 1;
+    flex: 0 0 5.5rem;
+    width: 5.5rem;
+    height: 5.5rem;
     border-radius: 0.75rem;
     overflow: hidden;
     border: 2px solid rgb(226 232 240);
@@ -316,7 +341,6 @@
           </td>
           <td class="px-4 py-3">
             <p class="font-semibold text-black">{{ a.nom|truncatechars:64 }}</p>
-            <p class="mt-0.5 font-mono text-[10px] text-slate-400">{{ a.article_id }}</p>
           </td>
           <td class="px-4 py-3 text-slate-700">{{ row.sous_type_libelle }}</td>
           <td class="px-4 py-3 text-slate-700">{{ row.unite_libelle }}</td>
@@ -346,7 +370,6 @@
         {% endif %}
         <div class="min-w-0 flex-1">
           <p class="font-semibold text-black">{{ a.nom|truncatechars:80 }}</p>
-          <p class="mt-1 font-mono text-[10px] text-slate-400">{{ a.article_id }}</p>
           {% if a.images %}<p class="mt-1 text-[10px] text-slate-500">{{ a.images|length }} image{% if a.images|length != 1 %}s{% endif %}</p>{% endif %}
           <dl class="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
             <div><dt class="text-slate-400">Sous-type</dt><dd>{{ row.sous_type_libelle }}</dd></div>
@@ -444,24 +467,26 @@
       <h2 id="modal-edit-title" class="text-lg font-bold text-black">Modifier l’article</h2>
       <button type="button" class="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-black art-close" data-close="modal-edit" aria-label="Fermer">✕</button>
     </div>
-    <form id="form-edit-article" method="post" action="{% url 'article_update' article_id='__ARTICLE_ID__' %}" hx-disable enctype="multipart/form-data" class="space-y-4 px-5 py-5">
+    <form id="form-edit-article" method="post" action="{% url 'article_update' article_id='__ARTICLE_ID__' %}" hx-disable enctype="multipart/form-data" class="space-y-4 px-5 pt-5">
       {% csrf_token %}
       <input type="hidden" name="edit-existing_images_json" id="edit-existing_images_json" value="[]">
       <input type="hidden" name="edit-main_image_index" id="edit-main_image_index" value="0">
-      {% for field in form_edit %}
-      <div>
-        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}{% if field.field.required %}<span class="text-red-600">*</span>{% endif %}</label>
-        {{ field }}
-        {% if field.errors %}<ul class="mt-1 text-sm font-medium text-red-600">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
-      </div>
-      {% endfor %}
-      <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
-        <p class="text-sm font-semibold text-black">Images de l’article</p>
-        <p class="mt-1 text-xs text-slate-500">Images déjà enregistrées et nouveaux fichiers : aperçu, retrait, choix de l’image principale.</p>
-        <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="edit-image_files">Ajouter des fichiers</label>
-        <input type="file" name="edit-image_files" id="edit-image_files" class="art-input" accept="image/*" multiple>
-        <div id="edit-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
-        <p id="edit-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image — ajoutez-en avec le champ ci-dessus.</p>
+      <div class="art-edit-scroll space-y-4">
+        {% for field in form_edit %}
+        <div>
+          <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}{% if field.field.required %}<span class="text-red-600">*</span>{% endif %}</label>
+          {{ field }}
+          {% if field.errors %}<ul class="mt-1 text-sm font-medium text-red-600">{% for e in field.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+        {% endfor %}
+        <div class="rounded-2xl border border-slate-100 bg-slate-50/80 p-4">
+          <p class="text-sm font-semibold text-black">Images de l’article</p>
+          <p class="mt-1 text-xs text-slate-500">Images déjà enregistrées et nouveaux fichiers : aperçu, retrait, choix de l’image principale.</p>
+          <label class="mt-3 block text-xs font-semibold uppercase tracking-wide text-slate-500" for="edit-image_files">Ajouter des fichiers</label>
+          <input type="file" name="edit-image_files" id="edit-image_files" class="art-input" accept="image/*" multiple>
+          <div id="edit-image-gallery" class="art-img-grid mt-4 min-h-[2rem]" aria-live="polite"></div>
+          <p id="edit-gallery-empty" class="mt-2 hidden text-center text-xs text-slate-400">Aucune image — ajoutez-en avec le champ ci-dessus.</p>
+        </div>
       </div>
       <div class="app-modal-actions art-edit-actions flex flex-wrap justify-between gap-2 pt-2">
         <button type="button" id="btn-open-delete" class="rounded-full border border-red-200 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-50">Supprimer…</button>
@@ -509,6 +534,11 @@
     var el = document.getElementById(id);
     if (!el) return;
     el.style.display = 'flex';
+    el.scrollTop = 0;
+    var panel = el.querySelector('.art-modal-panel');
+    if (panel) panel.scrollTop = 0;
+    var editScroll = el.querySelector('.art-edit-scroll');
+    if (editScroll) editScroll.scrollTop = 0;
     el.setAttribute('aria-hidden', 'false');
     document.body.classList.add('overflow-hidden');
   }
@@ -540,6 +570,16 @@
     renderCreateGallery();
   }
 
+  function sizeImageTile(tile, img) {
+    tile.style.width = '5.5rem';
+    tile.style.height = '5.5rem';
+    tile.style.maxWidth = '5.5rem';
+    tile.style.flex = '0 0 5.5rem';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+  }
+
   function renderCreateGallery() {
     var wrap = document.getElementById('create-image-gallery');
     var empty = document.getElementById('create-gallery-empty');
@@ -559,6 +599,7 @@
       var img = document.createElement('img');
       img.src = item.url;
       img.alt = '';
+      sizeImageTile(tile, img);
       tile.appendChild(img);
       var bar = document.createElement('div');
       bar.className = 'art-img-tile__actions';
@@ -646,6 +687,7 @@
       var img = document.createElement('img');
       img.src = mediaUrl + e.image.replace(/^\//, '');
       img.alt = '';
+      sizeImageTile(tile, img);
       tile.appendChild(img);
       var bar = document.createElement('div');
       bar.className = 'art-img-tile__actions';
@@ -679,6 +721,7 @@
       var img = document.createElement('img');
       img.src = item.url;
       img.alt = '';
+      sizeImageTile(tile, img);
       tile.appendChild(img);
       var bar = document.createElement('div');
       bar.className = 'art-img-tile__actions';

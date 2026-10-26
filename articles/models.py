@@ -9,8 +9,9 @@ from django.db import models
 
 
 class TypeArticle(models.Model):
-    """Paramétrage système — type d’article (référencé par id numérique ailleurs)."""
+    """Type d’article propre à une entreprise."""
 
+    entreprise_id = models.PositiveIntegerField(db_index=True, null=True)
     libelle = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
 
@@ -24,8 +25,9 @@ class TypeArticle(models.Model):
 
 
 class SousTypeArticle(models.Model):
-    """Paramétrage système — sous-type rattaché à un type_article_id (int, sans FK)."""
+    """Sous-type propre à une entreprise, référencé par ID numérique."""
 
+    entreprise_id = models.PositiveIntegerField(db_index=True, null=True)
     type_article_id = models.PositiveIntegerField(db_index=True)
     libelle = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
@@ -40,9 +42,10 @@ class SousTypeArticle(models.Model):
 
 
 class Unite(models.Model):
-    """Paramétrage système — unité de mesure (référencée par unite_id)."""
+    """Unité de mesure propre à une entreprise."""
 
-    code = models.CharField(max_length=32, unique=True)
+    entreprise_id = models.PositiveIntegerField(db_index=True, null=True)
+    code = models.CharField(max_length=32)
     libelle = models.CharField(max_length=128)
     actif = models.BooleanField(default=True)
 
@@ -50,6 +53,12 @@ class Unite(models.Model):
         ordering = ['libelle']
         verbose_name = 'unité'
         verbose_name_plural = 'unités'
+        constraints = [
+            models.UniqueConstraint(
+                fields=('entreprise_id', 'code'),
+                name='unique_unite_code_par_entreprise',
+            ),
+        ]
 
     def __str__(self) -> str:
         return f'{self.libelle} ({self.code})'
@@ -79,7 +88,10 @@ class Devise(models.Model):
             models.UniqueConstraint(fields=('entreprise_id', 'code'), name='unique_devise_code_par_entreprise'),
         ]
         indexes = [
-            models.Index(fields=['entreprise_id', 'principale', 'actif']),
+            models.Index(
+                fields=['entreprise_id', 'principale', 'actif'],
+                name='articles_de_entrepr_d1d402_idx',
+            ),
         ]
 
     def __str__(self) -> str:

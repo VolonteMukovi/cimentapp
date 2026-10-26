@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
-from articles.models import Devise
+from articles.models import Article, Devise
 from caisse.models import MouvementCaisse
 from lots.models import DepenseLot, LotStock
 from lots.services import sync_lot_transit_closure
@@ -268,6 +268,15 @@ class VenteCreateApiView(VentesAccessMixin, View):
             )
         if not normalized:
             return JsonResponse({'ok': False, 'error': 'Lignes invalides.'}, status=400)
+        article_names = {
+            article.article_id: article.nom
+            for article in Article.objects.filter(
+                entreprise_id=eid,
+                article_id__in={line['article_id'] for line in normalized},
+            ).only('article_id', 'nom')
+        }
+        if len(article_names) != len({line['article_id'] for line in normalized}):
+            return JsonResponse({'ok': False, 'error': 'Un article sélectionné est introuvable pour cette entreprise.'}, status=400)
 
         # FIFO: pour chaque article, consommer les lots les plus anciens
         vente = Vente(
@@ -315,7 +324,7 @@ class VenteCreateApiView(VentesAccessMixin, View):
             )
             lots = list(lots)
             if not lots:
-                raise ValueError(f'Stock insuffisant pour {article_id}.')
+                raise ValueError(f'Stock insuffisant pour {article_names[article_id]}.')
 
             # pré-calcul dépenses unitaires par lot (prorata sur qte entrée)
             lot_ids = [x.id for x in lots]
@@ -373,7 +382,7 @@ class VenteCreateApiView(VentesAccessMixin, View):
                         remaining_line_qty = current_line.quantite if current_line else Decimal('0')
 
             if remaining_total_qty > 0:
-                raise ValueError(f'Stock insuffisant pour {article_id}.')
+                raise ValueError(f'Stock insuffisant pour {article_names[article_id]}.')
 
         VenteFifoConsommation.objects.bulk_create(cons_rows)
 
@@ -446,4 +455,3 @@ class VentesStatsApiView(VentesAccessMixin, View):
             },
             status=200,
         )
-

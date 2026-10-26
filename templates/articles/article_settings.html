@@ -78,10 +78,17 @@
   <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
     <div>
       <h1 class="text-xl font-bold tracking-tight text-black sm:text-2xl">Paramètres</h1>
-      <p class="mt-1 text-sm text-slate-600">Unités, types, sous-types et devises utilisés par le magasin.</p>
+      <p class="mt-1 text-sm text-slate-600">
+        {% if active_entreprise %}Paramètres de {{ active_entreprise.nom }} : {% endif %}unités, types, sous-types et devises du magasin.
+      </p>
     </div>
     <a href="{% url 'store_articles' %}" class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Retour articles</a>
   </div>
+  {% if not active_entreprise_id %}
+  <p class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    Sélectionnez une entreprise active pour consulter ou modifier ses paramètres. Les réglages de chaque entreprise sont isolés.
+  </p>
+  {% endif %}
 
   <div class="mt-5 flex flex-wrap gap-2">
     <a href="{% url 'store_articles_settings' %}?tab=unites" class="rounded-full px-4 py-2 text-sm font-semibold {% if active_tab == 'unites' %}bg-black text-white{% else %}border border-slate-200 bg-white text-slate-700 hover:bg-slate-50{% endif %}">Unité</a>
@@ -878,4 +885,3 @@
 </script>
 
 {% endblock %}
-

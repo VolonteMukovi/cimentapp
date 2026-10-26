@@ -152,7 +152,10 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
             )
         }
         unite_ids = [article.unite_id for article in articles.values()]
-        unites = {x.id: x for x in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
+        unites = {
+            x.id: x
+            for x in Unite.objects.filter(entreprise_id=eid, id__in=unite_ids).only('id', 'libelle', 'code')
+        }
 
         # CA par lot: consommation détaillée -> lignes -> prix_unitaire_vente
         cons_detail = list(
@@ -201,7 +204,7 @@ class BeneficesParLotApiView(RapportsAccessMixin, View):
                     'lot_id': r['lot_id'],
                     'lot_reference': lot.reference if lot and lot.reference else f'Lot #{r["lot_id"]}',
                     'article_id': r['article_id'],
-                    'article_nom': article.nom if article else r['article_id'],
+                    'article_nom': article.nom if article else 'Article supprimé',
                     'unite': (unite.libelle or unite.code) if unite else '',
                     'quantite_vendue_fifo': str(r['qte'] or Decimal('0')),
                     'chiffre_affaires': str(ca),
@@ -358,4 +361,3 @@ class RapportsStatsApiView(RapportsAccessMixin, View):
             },
             status=200,
         )
-

@@ -16,6 +16,21 @@ class UniteForm(forms.ModelForm):
             'libelle': forms.TextInput(attrs={'class': 'art-input', 'maxlength': '128', 'autocomplete': 'off'}),
         }
 
+    def __init__(self, *args, entreprise_id=None, **kwargs):
+        self.entreprise_id = entreprise_id
+        super().__init__(*args, **kwargs)
+
+    def clean_code(self):
+        code = (self.cleaned_data.get('code') or '').strip()
+        if self.entreprise_id is None:
+            raise forms.ValidationError('Sélectionnez une entreprise active.')
+        duplicates = Unite.objects.filter(entreprise_id=self.entreprise_id, code=code)
+        if self.instance.pk:
+            duplicates = duplicates.exclude(pk=self.instance.pk)
+        if duplicates.exists():
+            raise forms.ValidationError('Ce code d’unité existe déjà pour cette entreprise.')
+        return code
+
 
 class DeviseForm(forms.ModelForm):
     class Meta:
@@ -72,10 +87,22 @@ class ArticleForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, entreprise_id=None, include_all_settings=False, **kwargs):
+        self.entreprise_id = entreprise_id
         super().__init__(*args, **kwargs)
-        types = {t.id: t.libelle for t in TypeArticle.objects.all().order_by('libelle')}
-        st_qs = SousTypeArticle.objects.all().order_by('type_article_id', 'libelle')
+        if entreprise_id is not None:
+            types_qs = TypeArticle.objects.filter(entreprise_id=entreprise_id)
+            st_qs = SousTypeArticle.objects.filter(entreprise_id=entreprise_id).order_by('type_article_id', 'libelle')
+            u_qs = Unite.objects.filter(entreprise_id=entreprise_id, actif=True).order_by('libelle')
+        elif include_all_settings:
+            types_qs = TypeArticle.objects.exclude(entreprise_id__isnull=True)
+            st_qs = SousTypeArticle.objects.exclude(entreprise_id__isnull=True).order_by('entreprise_id', 'type_article_id', 'libelle')
+            u_qs = Unite.objects.filter(entreprise_id__isnull=False, actif=True).order_by('libelle')
+        else:
+            types_qs = TypeArticle.objects.none()
+            st_qs = SousTypeArticle.objects.none()
+            u_qs = Unite.objects.none()
+        types = {t.id: t.libelle for t in types_qs.order_by('libelle')}
         self.fields['sous_type_article_id'] = forms.ChoiceField(
             label='Sous-type',
             choices=[('', '— Choisir un sous-type —')]
@@ -83,7 +110,6 @@ class ArticleForm(forms.ModelForm):
             required=True,
             widget=forms.Select(attrs={'class': 'art-input'}),
         )
-        u_qs = Unite.objects.filter(actif=True).order_by('libelle')
         self.fields['unite_id'] = forms.ChoiceField(
             label='Unité',
             choices=[('', '— Choisir une unité —')] + [(str(u.id), f'{u.libelle} ({u.code})') for u in u_qs],
@@ -101,7 +127,7 @@ class ArticleForm(forms.ModelForm):
         if not v:
             raise forms.ValidationError('Choisissez un sous-type.')
         pk = int(v)
-        if not SousTypeArticle.objects.filter(pk=pk).exists():
+        if not SousTypeArticle.objects.filter(pk=pk, entreprise_id=self.entreprise_id).exists():
             raise forms.ValidationError('Sous-type invalide.')
         return pk
 
@@ -110,7 +136,7 @@ class ArticleForm(forms.ModelForm):
         if not v:
             raise forms.ValidationError('Choisissez une unité.')
         pk = int(v)
-        if not Unite.objects.filter(pk=pk, actif=True).exists():
+        if not Unite.objects.filter(pk=pk, entreprise_id=self.entreprise_id, actif=True).exists():
             raise forms.ValidationError('Unité invalide.')
         return pk
 
@@ -141,9 +167,10 @@ class SousTypeArticleForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'art-input', 'rows': 3}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, entreprise_id=None, **kwargs):
+        self.entreprise_id = entreprise_id
         super().__init__(*args, **kwargs)
-        t_qs = TypeArticle.objects.all().order_by('libelle')
+        t_qs = TypeArticle.objects.filter(entreprise_id=entreprise_id).order_by('libelle') if entreprise_id is not None else TypeArticle.objects.none()
         self.fields['type_article'].choices = [('', '— Choisir un type —')] + [
             (str(t.id), t.libelle) for t in t_qs
         ]
@@ -156,13 +183,14 @@ class SousTypeArticleForm(forms.ModelForm):
         if not v:
             raise forms.ValidationError('Choisissez un type.')
         pk = int(v)
-        if not TypeArticle.objects.filter(pk=pk).exists():
+        if not TypeArticle.objects.filter(pk=pk, entreprise_id=self.entreprise_id).exists():
             raise forms.ValidationError('Type invalide.')
         return pk
 
     def save(self, commit=True):
         inst = super().save(commit=False)
         inst.type_article_id = int(self.cleaned_data['type_article'])
+        inst.entreprise_id = self.entreprise_id
         if commit:
             inst.save()
         return inst

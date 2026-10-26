@@ -90,13 +90,16 @@ def _payment_proof_context(eid: int, *, payment, proof_type: str) -> dict:
                 )
             }
             unite_ids = [article.unite_id for article in articles.values()]
-            unites = {unite.id: unite for unite in Unite.objects.filter(id__in=unite_ids).only('id', 'libelle', 'code')}
+            unites = {
+                unite.id: unite
+                for unite in Unite.objects.filter(entreprise_id=eid, id__in=unite_ids).only('id', 'libelle', 'code')
+            }
             for line in vente_lignes:
                 article = articles.get(line.article_id)
                 unite = unites.get(article.unite_id) if article else None
                 produits.append(
                     {
-                        'nom': article.nom if article else line.article_id,
+                        'nom': article.nom if article else 'Article supprimé',
                         'quantite': line.quantite,
                         'unite': (unite.libelle or unite.code) if unite else '',
                         'prix_unitaire': line.prix_unitaire_vente,
@@ -194,12 +197,21 @@ class CommandesApiListView(CommandesAccessMixin, View):
             c.id: c
             for c in Client.objects.filter(id__in=client_ids).only('id', 'nom', 'email')
         }
+        command_lines = list(CommandeLigne.objects.filter(commande_id__in=commande_ids).order_by('id'))
+        article_names = {
+            article.article_id: article.nom
+            for article in Article.objects.filter(
+                entreprise_id=eid,
+                article_id__in={line.article_id for line in command_lines},
+            ).only('article_id', 'nom')
+        }
         lignes_by_cmd: dict[str, list[dict]] = {}
-        for line in CommandeLigne.objects.filter(commande_id__in=commande_ids).order_by('id'):
+        for line in command_lines:
             lignes_by_cmd.setdefault(line.commande_id, []).append(
                 {
                     'id': line.id,
                     'article_id': line.article_id,
+                    'article_nom': article_names.get(line.article_id, 'Article supprimé'),
                     'quantite': str(line.quantite),
                     'prix_unitaire': str(line.prix_unitaire),
                     'total_ligne': str(line.total_ligne),
@@ -362,6 +374,13 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
         lignes_cmd = list(CommandeLigne.objects.filter(commande_id=cmd.commande_id).order_by('id'))
         if not lignes_cmd:
             return JsonResponse({'ok': False, 'error': 'Commande sans lignes.'}, status=400)
+        article_names = {
+            article.article_id: article.nom
+            for article in Article.objects.filter(
+                entreprise_id=eid,
+                article_id__in={line.article_id for line in lignes_cmd},
+            ).only('article_id', 'nom')
+        }
 
         delivered_by_line_id: dict[int, Decimal] = {}
         unit_price_by_line_id: dict[int, Decimal] = {}
@@ -383,10 +402,11 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
         for line in lignes_cmd:
             qte_livree = delivered_by_line_id.get(line.id, line.quantite)
             prix_unitaire = unit_price_by_line_id.get(line.id)
+            article_name = article_names.get(line.article_id, 'Article supprimé')
             if qte_livree <= 0:
-                return JsonResponse({'ok': False, 'error': f'Quantite livree invalide pour {line.article_id}.'}, status=400)
+                return JsonResponse({'ok': False, 'error': f'Quantite livree invalide pour {article_name}.'}, status=400)
             if prix_unitaire is None or prix_unitaire <= 0:
-                return JsonResponse({'ok': False, 'error': f'Prix de vente unitaire requis pour {line.article_id}.'}, status=400)
+                return JsonResponse({'ok': False, 'error': f'Prix de vente unitaire requis pour {article_name}.'}, status=400)
             total_ligne = (qte_livree * prix_unitaire).quantize(Decimal('0.01'))
             total_livre += total_ligne
             normalized_lines.append(
@@ -447,7 +467,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
             lots = list(lots)
             if not lots:
                 transaction.set_rollback(True)
-                return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_id}.'}, status=400)
+                return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_names.get(article_id, "Article supprimé")}.'}, status=400)
 
             lot_ids = [x.id for x in lots]
             exp_map: dict[int, Decimal] = {}
@@ -501,7 +521,7 @@ class CommandeCreerVenteApiView(CommandesAccessMixin, View):
 
             if remaining_total_qty > 0:
                 transaction.set_rollback(True)
-                return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_id}.'}, status=400)
+                return JsonResponse({'ok': False, 'error': f'Stock insuffisant pour {article_names.get(article_id, "Article supprimé")}.'}, status=400)
 
         VenteFifoConsommation.objects.bulk_create(cons_rows)
 
@@ -620,4 +640,3 @@ class DettePaiementConfirmerApiView(CommandesAccessMixin, View):
         paiement.confirmed_by_user_id = str(request.user.pk)
         paiement.save(update_fields=['statut', 'date_confirmation', 'confirmed_by_user_id'])
         return JsonResponse({'ok': True}, status=200)
-
