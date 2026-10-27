@@ -72,10 +72,11 @@
   function creerVente(cmd) {
     var lignes = [];
     (cmd.lignes || []).forEach(function(line){
-      var promptText = 'Quantite livree pour ' + line.article_id + '\nCommandee: ' + line.quantite + '\nVous pouvez livrer plus que la commande.';
+      var articleName = line.article_nom || 'Article supprimé';
+      var promptText = 'Quantite livree pour ' + articleName + '\nCommandee: ' + line.quantite + '\nVous pouvez livrer plus que la commande.';
       var value = prompt(promptText, line.quantite);
       if (value === null) return;
-      var prix = prompt('Prix de vente unitaire pour ' + line.article_id, line.prix_unitaire && line.prix_unitaire !== '0.00' ? line.prix_unitaire : '');
+      var prix = prompt('Prix de vente unitaire pour ' + articleName, line.prix_unitaire && line.prix_unitaire !== '0.00' ? line.prix_unitaire : '');
       if (prix === null) return;
       lignes.push({ id: line.id, quantite: value, prix_unitaire: prix });
     });
@@ -159,4 +160,3 @@
 })();
 </script>
 {% endblock %}
-

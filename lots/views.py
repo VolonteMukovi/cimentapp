@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView, View
 
 from articles.currency import get_primary_currency_code, resolve_transaction_currency, to_primary_amount
-from articles.models import Devise
+from articles.models import Article, Devise
 from caisse.models import MouvementCaisse
 from caisse.services import cash_balances_by_caisse
 from fournisseurs.models import Fournisseur
@@ -447,26 +447,41 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
         planned_debits: dict[int, Decimal] = {}
         normalized_articles = []
         total_articles = Decimal('0')
+        requested_article_ids = {
+            str(row.get('article_id') or '').strip()
+            for row in articles
+            if isinstance(row, dict) and str(row.get('article_id') or '').strip()
+        }
+        article_names = {
+            article.article_id: article.nom
+            for article in Article.objects.filter(
+                entreprise_id=eid,
+                article_id__in=requested_article_ids,
+            ).only('article_id', 'nom')
+        }
 
         for row in articles:
             if not isinstance(row, dict):
                 continue
             article_id = str(row.get('article_id') or '').strip()
+            article_name = article_names.get(article_id)
             qte = _d(row.get('quantite'))
             pu = _d(row.get('prix_unitaire_achat'))
             if not article_id or qte <= 0 or pu < 0:
                 continue
+            if not article_name:
+                return JsonResponse({'ok': False, 'error': 'Un article sélectionné est introuvable pour cette entreprise.'}, status=400)
             montant = (qte * pu).quantize(Decimal('0.01'))
             financements = row.get('financements') or []
             if not isinstance(financements, list) or not financements:
-                return JsonResponse({'ok': False, 'error': f'Financement requis pour article {article_id}.'}, status=400)
+                return JsonResponse({'ok': False, 'error': f'Financement requis pour {article_name}.'}, status=400)
             total_fin = Decimal('0')
             fin_rows = []
             for f in financements:
                 caisse_id = f.get('caisse_id')
                 mnt = _d(f.get('montant')).quantize(Decimal('0.01'))
                 if not str(caisse_id).isdigit() or mnt <= 0:
-                    return JsonResponse({'ok': False, 'error': f'Financement invalide pour article {article_id}.'}, status=400)
+                    return JsonResponse({'ok': False, 'error': f'Financement invalide pour {article_name}.'}, status=400)
                 caisse_id = int(caisse_id)
                 total_fin += mnt
                 fin_rows.append({'caisse_id': caisse_id, 'montant': mnt})
@@ -475,11 +490,11 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                 return JsonResponse(
                     {
                         'ok': False,
-                        'error': f'Incohérence de financement article {article_id}: attendu {montant}, obtenu {total_fin}.',
+                        'error': f'Incohérence de financement pour {article_name}: attendu {montant}, obtenu {total_fin}.',
                     },
                     status=400,
                 )
-            normalized_articles.append({'article_id': article_id, 'quantite': qte, 'pu': pu, 'montant': montant, 'financements': fin_rows})
+            normalized_articles.append({'article_id': article_id, 'article_nom': article_name, 'quantite': qte, 'pu': pu, 'montant': montant, 'financements': fin_rows})
             total_articles += montant
 
         normalized_frais = []
@@ -555,7 +570,7 @@ class LotTransitCreateApiView(LotsAccessMixin, View):
                     montant=fin['montant'],
                     devise=devise,
                     date_mouvement=timezone.now(),
-                    libelle=f'Approvisionnement lot {reference} - article {ar["article_id"]}',
+                    libelle=f'Approvisionnement lot {reference} - {ar["article_nom"]}',
                     source_type='lot_article',
                     source_id=str(line.id),
                     created_by_user_id=str(request.user.pk),
@@ -646,14 +661,22 @@ class LotTransitApiListView(LotsAccessMixin, View):
                 LotTransitArticle.objects.filter(lot_transit_id=lot.id).aggregate(s=Sum('cout_total')).get('s') or Decimal('0')
             )
             total_frais = LotTransitFrais.objects.filter(lot_transit_id=lot.id).aggregate(s=Sum('montant')).get('s') or Decimal('0')
+            lot_lines = list(LotTransitArticle.objects.filter(lot_transit_id=lot.id).order_by('id'))
+            article_names = {
+                article.article_id: article.nom
+                for article in Article.objects.filter(
+                    entreprise_id=eid,
+                    article_id__in={line.article_id for line in lot_lines},
+                ).only('article_id', 'nom')
+            }
             articles = [
                 {
-                    'article_id': line.article_id,
+                    'article_nom': article_names.get(line.article_id, 'Article supprimé'),
                     'quantite': str(line.quantite),
                     'prix_unitaire_achat': str(line.prix_unitaire_achat),
                     'pu_reel_propose': str(line.pu_reel_propose),
                 }
-                for line in LotTransitArticle.objects.filter(lot_transit_id=lot.id).order_by('id')
+                for line in lot_lines
             ]
             results.append(
                 {
@@ -710,4 +733,3 @@ class LotTransitStatsApiView(LotsAccessMixin, View):
             'cloture': base.filter(statut=LotTransit.Statut.CLOTURE).count(),
         }
         return JsonResponse({'ok': True, 'stats': stats}, status=200)
-

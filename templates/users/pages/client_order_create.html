@@ -63,7 +63,7 @@
         articles.forEach(function(a){
           var opt = document.createElement('option');
           opt.value = a.article_id;
-          opt.textContent = a.display_label || (a.nom + ' (' + a.article_id + ')');
+          opt.textContent = a.display_label || a.nom;
           opt.title = opt.textContent;
           articleSel.appendChild(opt);
         });
@@ -105,4 +105,3 @@
 })();
 </script>
 {% endblock %}
-

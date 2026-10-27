@@ -66,6 +66,11 @@
 
   function num(v){ var n = parseFloat(String(v||'').replace(',', '.')); return isNaN(n) ? 0 : n; }
   function qs(params){ return Object.keys(params).map(function(k){ return encodeURIComponent(k)+'='+encodeURIComponent(params[k]); }).join('&'); }
+  function escapeHtml(value){
+    return String(value || '').replace(/[&<>"']/g, function(char){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
+    });
+  }
   function caisseLabel(c) {
     if (c.display_label) return c.display_label;
     var details = [c.banque_nom, c.compte_intitule].filter(function(x){ return !!x; }).join(' + ');
@@ -189,7 +194,7 @@
           var card = document.createElement('div');
           card.className = 'rounded-2xl border border-slate-200 bg-white p-3';
           var suggestions = (lot.articles || []).map(function(a){
-            return '<p class="text-xs text-slate-700">Article '+a.article_id+' : PU conseille '+a.pu_reel_propose+' '+(lot.devise || primaryCurrency)+'</p>';
+            return '<p class="text-xs text-slate-700">'+escapeHtml(a.article_nom || 'Article supprimé')+' : PU conseillé '+escapeHtml(a.pu_reel_propose)+' '+escapeHtml(lot.devise || primaryCurrency)+'</p>';
           }).join('');
           card.innerHTML =
             '<div class="flex items-center justify-between gap-2"><p class="font-semibold text-black">'+lot.reference+'</p>'+
@@ -245,7 +250,7 @@
   fetch('/magasin/articles/api/articles/?page=1&page_size=200', { headers: { 'Accept': 'application/json' }})
     .then(function(r){ return r.json(); }).then(function(data){
       articlesOptions = (data.results||[]).map(function(a){
-        return { id: a.article_id, label: a.display_label || (a.nom+' ('+a.article_id+')') };
+        return { id: a.article_id, label: a.display_label || a.nom };
       });
       if (!document.querySelector('.article-row')) addArticleRow();
       refreshDynamicSelects();
@@ -278,4 +283,3 @@
 })();
 </script>
 {% endblock %}
-
