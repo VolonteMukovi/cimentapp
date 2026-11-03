@@ -20,7 +20,8 @@ graceful_timeout = 30
 keepalive = 5
 max_requests = int(os.getenv("GUNICORN_MAX_REQUESTS", "1000"))
 max_requests_jitter = 100
-worker_tmp_dir = os.getenv("GUNICORN_WORKER_TMP", "/cimentapp/tmp")
+# Worker heartbeats use os.utime on a file descriptor; avoid the Windows bind mount.
+worker_tmp_dir = "/tmp"
 limit_request_line = 8190
 limit_request_fields = 200
 limit_request_field_size = 8190
