@@ -12,17 +12,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/htmx.org@2.0.0"></script>
   <script src="{% static 'js/htmx-csrf.js' %}"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          screens: { sm: '576px', md: '768px', lg: '992px', xl: '1200px', '2xl': '1400px' },
-          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-        },
-      },
-    };
-  </script>
+  <link rel="stylesheet" href="{% static 'css/tailwind.css' %}">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 </head>
 <body hx-boost="false" class="font-sans flex min-h-full flex-col app-shell-bg text-slate-900 antialiased">

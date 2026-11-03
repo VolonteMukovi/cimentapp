@@ -5,7 +5,8 @@ services:
       - "8001:8001"
     volumes:
       - .:/cimentapp
-      # Persistance des uploads (logos, images articles, preuves)
+      - ./media:/media_legacy:ro
+      # Persistent destination; entrypoint merges existing host media here.
       - media_data:/cimentapp/media
     depends_on:
       db:
